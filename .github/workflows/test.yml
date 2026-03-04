@@ -65,7 +65,7 @@ jobs:
           ERRORS=$(python - <<EOF
 
           
-        import json
+        import json:
 
         try:
             r=json.load(open("system_test_report.json"))
