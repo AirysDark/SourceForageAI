@@ -2,11 +2,14 @@ import json
 from pathlib import Path
 
 
-REPORT_FILE = Path("system_test_report.json")
+ROOT = Path(__file__).resolve().parents[1]
+
+REPORT_FILE = ROOT / "system_test_report.json"
+
 
 if not REPORT_FILE.exists():
 
-    print("Report file not found")
+    print("Report file not found:", REPORT_FILE)
     exit(1)
 
 

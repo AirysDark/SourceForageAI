@@ -7,7 +7,6 @@ from time import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
-
 sys.path.insert(0, str(ROOT))
 
 
@@ -33,15 +32,18 @@ SKIP_DIRS = {
 }
 
 
-# --------------------------------
+# -----------------------------
 # Safe module loader
-# --------------------------------
+# -----------------------------
 
 def load_module(path: Path):
 
     try:
 
         spec = importlib.util.spec_from_file_location(path.stem, path)
+
+        if spec is None or spec.loader is None:
+            return None, "Invalid module spec"
 
         module = importlib.util.module_from_spec(spec)
 
@@ -54,15 +56,18 @@ def load_module(path: Path):
         return None, str(e)
 
 
-# --------------------------------
+# -----------------------------
 # Python module tests
-# --------------------------------
+# -----------------------------
 
 def test_python_modules():
 
     for file in ROOT.rglob("*.py"):
 
         if any(x in file.parts for x in SKIP_DIRS):
+            continue
+
+        if file.name.startswith("test_"):
             continue
 
         module, error = load_module(file)
@@ -79,9 +84,9 @@ def test_python_modules():
             REPORT["python_modules"].append(str(file))
 
 
-# --------------------------------
+# -----------------------------
 # Build module validation
-# --------------------------------
+# -----------------------------
 
 def test_build_modules():
 
@@ -110,7 +115,12 @@ def test_build_modules():
             "detect"
         ]
 
-        missing = [x for x in required if not hasattr(module, x)]
+        missing = []
+
+        for attr in required:
+
+            if not hasattr(module, attr):
+                missing.append(attr)
 
         if missing:
 
@@ -121,12 +131,21 @@ def test_build_modules():
 
         else:
 
-            REPORT["build_modules"].append(module.NAME)
+            if not callable(module.detect):
+
+                REPORT["build_module_failures"].append({
+                    "file": str(file),
+                    "error": "detect is not callable"
+                })
+
+            else:
+
+                REPORT["build_modules"].append(module.NAME)
 
 
-# --------------------------------
+# -----------------------------
 # YAML workflow validation
-# --------------------------------
+# -----------------------------
 
 def test_yaml():
 
@@ -135,7 +154,7 @@ def test_yaml():
     if not workflow_dir.exists():
         return
 
-    for file in workflow_dir.glob("*.yml"):
+    for file in workflow_dir.glob("*.*ml"):
 
         try:
 
@@ -160,9 +179,9 @@ def test_yaml():
             })
 
 
-# --------------------------------
+# -----------------------------
 # Build summary
-# --------------------------------
+# -----------------------------
 
 def build_summary(start):
 
@@ -191,9 +210,9 @@ def build_summary(start):
     }
 
 
-# --------------------------------
+# -----------------------------
 # Run tests
-# --------------------------------
+# -----------------------------
 
 def run():
 
@@ -211,7 +230,7 @@ def run():
 
     report_file.write_text(json.dumps(REPORT, indent=2))
 
-    print("Report saved:", report_file)
+    print("Report saved:", report_file.resolve())
 
     print("\nSummary\n")
 
