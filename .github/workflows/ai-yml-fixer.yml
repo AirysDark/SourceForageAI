@@ -24,7 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pyyaml
+          pip install pyyaml requests
 
       - name: Run YAML fixer
         run: |
