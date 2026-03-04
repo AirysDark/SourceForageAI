@@ -45,6 +45,38 @@ jobs:
           find . -name "Cargo.toml" >> $REPORT || true
           find . -name "package.json" >> $REPORT || true
           find . -name "pyproject.toml" >> $REPORT || true
+          find . -name "build.gradle" >> $REPORT || true
+          find . -name "pom.xml" >> $REPORT || true
+
+          echo -e "\n=== PYTHON FILES ===" >> $REPORT
+          find . -name "*.py" >> $REPORT || true
+
+          echo -e "\n=== PYTHON IMPORT GRAPH ===" >> $REPORT
+          grep -R "import " --include="*.py" . >> $REPORT || true
+          grep -R "from .* import" --include="*.py" . >> $REPORT || true
+
+          echo -e "\n=== PYTHON CLASSES ===" >> $REPORT
+          grep -R "class " --include="*.py" . >> $REPORT || true
+
+          echo -e "\n=== PYTHON FUNCTIONS ===" >> $REPORT
+          grep -R "def " --include="*.py" . >> $REPORT || true
+
+          echo -e "\n=== SHELL SCRIPTS ===" >> $REPORT
+          find . -name "*.sh" >> $REPORT || true
+
+          echo -e "\n=== DOCKERFILES ===" >> $REPORT
+          find . -name "Dockerfile" >> $REPORT || true
+
+          echo -e "\n=== CI PIPELINES ===" >> $REPORT
+          find . -path "*/.github/workflows/*.yml" >> $REPORT || true
+
+          echo -e "\n=== REQUIREMENTS FILES ===" >> $REPORT
+          find . -name "requirements.txt" >> $REPORT || true
+          find . -name "poetry.lock" >> $REPORT || true
+
+          echo -e "\n=========================================" >> $REPORT
+          echo " RECON COMPLETE" >> $REPORT
+          echo "=========================================" >> $REPORT
 
       - name: Upload Recon Report
         uses: actions/upload-artifact@v4
