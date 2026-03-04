@@ -1,3 +1,11 @@
+
+def detect_build_system(path):
+    return 'unknown'
+
+
+def clone_repo(url):
+    pass
+
 repo = clone_repo()
 
 intel = analyze_repo(repo)

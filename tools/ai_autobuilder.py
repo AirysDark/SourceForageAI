@@ -1,3 +1,15 @@
+
+def detect_build_system(path):
+    return 'unknown'
+
+
+def run_build(cmd):
+    return 1
+
+
+def call_llm(prompt):
+    return ''
+
 #!/usr/bin/env python3
 
 import sys
