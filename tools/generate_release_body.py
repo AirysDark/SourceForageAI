@@ -1,6 +1,17 @@
 import json
+import os
 
-body = ["SourceForageAI System Test Report", ""]
+workflow = os.getenv("GITHUB_WORKFLOW", "SourceForageAI Workflow")
+run_id = os.getenv("GITHUB_RUN_ID", "")
+repo = os.getenv("GITHUB_REPOSITORY", "")
+
+body = [
+    f"{workflow} Report",
+    "",
+    f"Repository: {repo}",
+    f"Run ID: {run_id}",
+    ""
+]
 
 try:
     r = json.load(open("system_test_report.json"))
@@ -18,7 +29,8 @@ try:
     else:
         body.append("No errors detected")
 
-except:
+except Exception as e:
     body.append("Report parsing failed")
+    body.append(str(e))
 
 open("release_body.txt","w").write("\n".join(body))
