@@ -1,0 +1,89 @@
+name: SourceForageAI Repair Engine
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  repair:
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip jq zip
+          python -m pip install --upgrade pip
+          pip install requests || true
+
+
+      - name: Download latest reports
+        run: |
+
+          mkdir reports
+          cd reports
+
+          echo "Downloading latest recon report..."
+
+          curl -L \
+          https://github.com/${{ github.repository }}/releases/latest/download/ultra-deep-recon-report.zip \
+          -o recon.zip || true
+
+          echo "Downloading latest test report..."
+
+          curl -L \
+          https://github.com/${{ github.repository }}/releases/latest/download/sourceforage-test-report.zip \
+          -o test.zip || true
+
+          unzip recon.zip || true
+          unzip test.zip || true
+
+          cd ..
+
+
+      - name: Run repair engine
+        run: |
+          python tools/repair/repair_engine.py
+
+
+      - name: Zip repair results
+        run: |
+          zip sourceforage-repair-results.zip repair_report.txt repaired_files/* || true
+
+
+      - name: Generate release body
+        run: |
+          python tools/generate_release_body.py
+
+
+      - name: Generate timestamp
+        run: |
+          echo "RELEASE_TITLE=Repair Engine - $(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
+          echo "RELEASE_TAG=Repair-Engine-$(date '+%Y%m%d-%H%M%S')" >> $GITHUB_ENV
+
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TITLE }}
+          body_path: release_body.txt
+          files: sourceforage-repair-results.zip
+
+
+      - name: Upload repair artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourceforage-repair-results
+          path: |
+            repair_report.txt
+            repaired_files/
