@@ -4,14 +4,21 @@ on:
   workflow_dispatch:
 
 jobs:
+
   recon:
+
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
+
       - name: Checkout SourceForageAI
         uses: actions/checkout@v4
         with:
           submodules: true
+
 
       - name: Install Tools
         run: |
@@ -19,13 +26,15 @@ jobs:
           sudo apt-get install -y \
             tree unzip file binutils coreutils \
             build-essential cmake ninja-build \
-            meson bison flex wget graphviz
+            meson bison flex wget graphviz zip
 
           python -m pip install --upgrade pip
           pip install requests networkx || true
 
+
       - name: Run Ultra Deep Scan
         run: |
+
           REPORT="ultra_recon.txt"
 
           echo "=========================================" > $REPORT
@@ -79,7 +88,6 @@ jobs:
           find . -name "Pipfile" >> $REPORT || true
 
           echo -e "\n=== GENERATING MACHINE INTELLIGENCE JSON ===" >> $REPORT
-
           if [ -f tools/build/deep_intelligence_scanner.py ]; then
             python tools/build/deep_intelligence_scanner.py || true
           else
@@ -90,11 +98,27 @@ jobs:
           echo " RECON COMPLETE" >> $REPORT
           echo "=========================================" >> $REPORT
 
-      - name: Upload Recon Report
-        uses: actions/upload-artifact@v4
+
+      - name: Zip Recon Report
+        run: |
+          zip ultra-deep-recon-report.zip ultra_recon.txt repo_intelligence.json
+
+
+      - name: Generate release body
+        run: |
+          python tools/generate_release_body.py
+
+
+      - name: Generate timestamp
+        run: |
+          echo "RELEASE_TITLE=Ultra Deep Recon - $(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
+          echo "RELEASE_TAG=Ultra-Deep-Recon-$(date '+%Y%m%d-%H%M%S')" >> $GITHUB_ENV
+
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
         with:
-          name: ultra-deep-recon-report
-          path: |
-            ultra_recon.txt
-            repo_intelligence.json
-          if-no-files-found: warn
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TITLE }}
+          body_path: release_body.txt
+          files: ultra-deep-recon-report.zip
