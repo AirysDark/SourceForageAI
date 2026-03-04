@@ -1,0 +1,32 @@
+name: SourceForageAI System Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml requests
+
+      - name: Run system tests
+        run: |
+          python tools/test_system.py
+          python tools/test_report.py
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourceforage-test-report
+          path: system_test_report.json
