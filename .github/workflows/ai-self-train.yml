@@ -1,0 +1,41 @@
+name: AI Self Training
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  train:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install requests pyyaml
+
+      - name: Run repository crawler
+        run: |
+          python tools/crawler/github_crawler.py || true
+
+      - name: Train knowledge brain
+        run: |
+          python tools/training/trainer.py || true
+
+      - name: Commit updated knowledge
+        run: |
+          git config --global user.name "AI Trainer"
+          git config --global user.email "ai@sourceforage.local"
+
+          git add .
+
+          git commit -m "AI training update" || true
+          git push

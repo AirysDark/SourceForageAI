@@ -1,0 +1,38 @@
+name: AI Build Repair
+
+on:
+  workflow_dispatch:
+
+jobs:
+  repair:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install requests pyyaml
+
+      - name: Run build analyzer
+        run: |
+          python tools/ai/failure_analyzer.py || true
+
+      - name: Generate patches
+        run: |
+          python tools/ai/patch_engine.py || true
+
+      - name: Commit patches
+        run: |
+          git config --global user.name "AI Repair"
+          git config --global user.email "ai@sourceforage.local"
+
+          git add .
+          git commit -m "AI auto repair" || true
+          git push

@@ -3,76 +3,10 @@ name: AI Remote Build Lab
 on:
   workflow_dispatch:
     inputs:
-
       repository:
         description: "GitHub repository (owner/repo or URL)"
-        required: false
-        type: string
-
-      branch:
-        description: "Branch to checkout"
-        default: "main"
-        required: false
-        type: string
-
-      build_hint:
-        description: "Optional build system hint (cmake, make, python, cargo, etc)"
-        required: false
-        type: string
-
-      custom_command:
-        description: "Custom build command to run before AI autobuilder"
-        required: false
-        type: string
-
-      run_discovery:
-        description: "Run Build Discovery"
         required: true
-        default: true
-        type: boolean
-
-      run_module_generator:
-        description: "Run Module Generator"
-        required: true
-        default: true
-        type: boolean
-
-      run_training:
-        description: "Run AI Training"
-        required: true
-        default: true
-        type: boolean
-
-      run_autobuilder:
-        description: "Run AI Autobuilder"
-        required: true
-        default: true
-        type: boolean
-
-      run_brain_training:
-        description: "Run Knowledge Brain Training"
-        required: false
-        default: false
-        type: boolean
-
-      run_stats:
-        description: "Generate Build Statistics"
-        required: false
-        default: false
-        type: boolean
-
-      run_export:
-        description: "Export Knowledge Database"
-        required: false
-        default: false
-        type: boolean
-
-      crawler_mode:
-        description: "Run Repository Crawler Instead of Single Repo Build"
-        required: false
-        default: false
-        type: boolean
-
+        type: string
 
 jobs:
 
@@ -117,15 +51,7 @@ jobs:
           pip install requests || true
 
 
-      - name: Run repository crawler
-        if: ${{ github.event.inputs.crawler_mode == 'true' }}
-        run: |
-          echo "Running repository crawler..."
-          python tools/build/repo_crawler.py || true
-
-
       - name: Clone target repository
-        if: ${{ github.event.inputs.crawler_mode != 'true' && github.event.inputs.repository != '' }}
         run: |
 
           echo "Target repo: ${{ github.event.inputs.repository }}"
@@ -138,57 +64,26 @@ jobs:
             git clone "https://github.com/$REPO.git" target_repo
           fi
 
-          cd target_repo
-          git checkout "${{ github.event.inputs.branch }}" || true
-
-
-      - name: Apply build hint
-        if: ${{ github.event.inputs.build_hint != '' }}
-        run: |
-          echo "Build hint: ${{ github.event.inputs.build_hint }}"
-          echo "${{ github.event.inputs.build_hint }}" > target_repo/build_hint.txt
-
 
       - name: Run build discovery
-        if: ${{ github.event.inputs.run_discovery == 'true' }}
         run: |
           echo "Running build discovery..."
           python tools/build/generate_build_modules.py || true
 
 
       - name: Run module generator
-        if: ${{ github.event.inputs.run_module_generator == 'true' }}
         run: |
           echo "Running module generator..."
           python tools/build/module_generator.py || true
 
 
       - name: Run AI training
-        if: ${{ github.event.inputs.run_training == 'true' }}
         run: |
           echo "Running AI training..."
           python tools/build/knowledge_trainer.py || true
 
 
-      - name: Train Knowledge Brain
-        if: ${{ github.event.inputs.run_brain_training == 'true' }}
-        run: |
-          echo "Training Knowledge Brain..."
-          python tools/build/knowledge_brain/train_brain.py || true
-
-
-      - name: Run custom command
-        if: ${{ github.event.inputs.custom_command != '' }}
-        run: |
-          echo "Running custom command:"
-          echo "${{ github.event.inputs.custom_command }}"
-
-          cd target_repo
-          bash -c "${{ github.event.inputs.custom_command }}" || true
-
-
       - name: Run AI Autobuilder
-        if: ${{ github.event.inputs.run_autobuilder == 'true' }}
         env:
           PROVIDER: openai
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -198,18 +93,6 @@ jobs:
 
           cd target_repo
           python ../tools/ai_autobuilder.py || true
-
-
-      - name: Generate build statistics
-        if: ${{ github.event.inputs.run_stats == 'true' }}
-        run: |
-          python tools/build/build_stats.py || true
-
-
-      - name: Export knowledge database
-        if: ${{ github.event.inputs.run_export == 'true' }}
-        run: |
-          python tools/build/export_knowledge.py || true
 
 
       - name: Upload logs
