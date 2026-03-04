@@ -7,23 +7,89 @@ on:
 
 jobs:
   discover-repos:
+
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: write
 
     steps:
+
+      # -----------------------------
+      # Checkout repo
+      # -----------------------------
+
       - name: Checkout SourceForageAI
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # -----------------------------
+      # Setup Python
+      # -----------------------------
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # -----------------------------
+      # Install dependencies
+      # -----------------------------
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests
 
+      # -----------------------------
+      # Restore crawler database
+      # -----------------------------
+
+      - name: Restore crawler cache
+        uses: actions/cache@v4
+        with:
+          path: crawler_db.json
+          key: crawler-db-${{ github.repository }}
+          restore-keys: |
+            crawler-db-
+
+      # -----------------------------
+      # Run crawler
+      # -----------------------------
+
       - name: Discover repositories
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Starting SourceForageAI crawler..."
-          python tools/build/repo_crawler.py || true
+          python tools/crawler/github_crawler.py
+
+      # -----------------------------
+      # Upload crawler results
+      # -----------------------------
+
+      - name: Upload crawler workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawler-workspace
+          path: crawler_workspace
+          if-no-files-found: ignore
+
+      # -----------------------------
+      # Commit updated crawler DB
+      # -----------------------------
+
+      - name: Commit crawler database
+        run: |
+          git config --global user.name "sourceforage-crawler[bot]"
+          git config --global user.email "crawler@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "No crawler DB changes"
+          else
+            git add crawler_db.json
+            git commit -m "Crawler: update discovered repositories"
+            git push
+          fi

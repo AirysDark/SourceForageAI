@@ -3,6 +3,7 @@ import subprocess
 import json
 from pathlib import Path
 import time
+import os
 
 API = "https://api.github.com/search/repositories"
 
@@ -11,9 +12,14 @@ WORKDIR.mkdir(exist_ok=True)
 
 DB = Path("crawler_db.json")
 
+TOKEN = os.getenv("GITHUB_TOKEN")
+
 HEADERS = {
     "User-Agent": "SourceForageAI"
 }
+
+if TOKEN:
+    HEADERS["Authorization"] = f"Bearer {TOKEN}"
 
 
 QUERIES = [
@@ -26,18 +32,30 @@ QUERIES = [
 ]
 
 
+MAX_REPOS = 50
+PAGES = 3
+
+
+# -----------------------------
+# Database
+# -----------------------------
+
 def load_db():
 
     if DB.exists():
-        return json.loads(DB.read_text())
+        return set(json.loads(DB.read_text()))
 
-    return []
+    return set()
 
 
 def save_db(data):
 
-    DB.write_text(json.dumps(data, indent=2))
+    DB.write_text(json.dumps(list(data), indent=2))
 
+
+# -----------------------------
+# Discover repos
+# -----------------------------
 
 def discover_repositories():
 
@@ -45,20 +63,47 @@ def discover_repositories():
 
     for q in QUERIES:
 
-        r = requests.get(
-            API,
-            params={"q": q, "per_page": 20},
-            headers=HEADERS
-        )
+        print("Query:", q)
 
-        data = r.json()
+        for page in range(1, PAGES + 1):
 
-        for item in data.get("items", []):
+            r = requests.get(
+                API,
+                params={
+                    "q": q,
+                    "per_page": 30,
+                    "page": page
+                },
+                headers=HEADERS
+            )
 
-            repos.append(item["full_name"])
+            if r.status_code != 200:
+
+                print("GitHub API error:", r.text)
+                return repos
+
+            data = r.json()
+
+            items = data.get("items", [])
+
+            if not items:
+                break
+
+            for item in items:
+
+                repos.append(item["full_name"])
+
+                if len(repos) >= MAX_REPOS:
+                    return repos
+
+            time.sleep(1)
 
     return repos
 
+
+# -----------------------------
+# Clone repo
+# -----------------------------
 
 def clone_repo(repo):
 
@@ -66,6 +111,8 @@ def clone_repo(repo):
 
     if path.exists():
         return path
+
+    print("Cloning:", repo)
 
     subprocess.run([
         "git",
@@ -79,13 +126,29 @@ def clone_repo(repo):
     return path
 
 
+# -----------------------------
+# Run autobuilder
+# -----------------------------
+
 def run_autobuilder(repo_path):
+
+    autobuilder = Path(__file__).resolve().parents[2] / "tools" / "ai_autobuilder.py"
+
+    if not autobuilder.exists():
+        print("Autobuilder not found")
+        return
+
+    print("Running autobuilder on", repo_path)
 
     subprocess.run([
         "python",
-        "tools/ai_autobuilder.py"
+        str(autobuilder)
     ], cwd=repo_path)
 
+
+# -----------------------------
+# Main
+# -----------------------------
 
 def main():
 
@@ -93,22 +156,24 @@ def main():
 
     repos = discover_repositories()
 
+    print("Discovered repos:", len(repos))
+
     for repo in repos:
 
         if repo in db:
             continue
 
-        print("Building:", repo)
+        print("Processing:", repo)
 
         path = clone_repo(repo)
 
         run_autobuilder(path)
 
-        db.append(repo)
+        db.add(repo)
 
         save_db(db)
 
-        time.sleep(3)
+        time.sleep(2)
 
 
 if __name__ == "__main__":
