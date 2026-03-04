@@ -52,25 +52,19 @@ async function runWorkflow(workflow){
     const targetRepo =
         document.getElementById("repo")?.value || ""
 
-    if(!targetRepo){
-
-        alert("Enter repository: owner/repo")
-
-        return
-
-    }
-
     log(`Starting workflow: ${workflow}`)
 
     const url =
     `https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/${workflow}/dispatches`
 
-    const body = {
+    /* Build payload safely */
 
-        ref:"main",
+    const body = { ref:"main" }
 
-        inputs:{
-            repository:targetRepo
+    if(targetRepo){
+
+        body.inputs = {
+            repository: targetRepo
         }
 
     }
@@ -82,7 +76,7 @@ async function runWorkflow(workflow){
             method:"POST",
 
             headers:{
-                "Authorization":"token "+token,
+                "Authorization":"Bearer "+token,
                 "Accept":"application/vnd.github+json"
             },
 
@@ -100,13 +94,13 @@ async function runWorkflow(workflow){
         }
         else{
 
-            const text = await res.text()
+            const txt = await res.text()
 
-            console.error(text)
+            console.error(txt)
 
-            log("Workflow start failed")
+            log(`Workflow failed (${res.status})`)
 
-            alert("Failed to start workflow")
+            alert("Workflow failed: " + res.status)
 
         }
 
@@ -138,7 +132,7 @@ async function loadRuns(){
 
         const res = await fetch(url,{
             headers:{
-                "Authorization":"token "+token
+                "Authorization":"Bearer "+token
             }
         })
 
@@ -208,7 +202,7 @@ async function loadStats(){
 
         const res = await fetch(url,{
             headers:{
-                "Authorization":"token "+token
+                "Authorization":"Bearer "+token
             }
         })
 
@@ -224,7 +218,7 @@ async function loadStats(){
             if(run.status === "in_progress")
                 running++
 
-            if(run.status === "queued")
+            else if(run.status === "queued")
                 queued++
 
             if(run.conclusion === "failure")
@@ -237,15 +231,20 @@ async function loadStats(){
 
         const total = success + failed
 
-        const rate = total > 0
+        const rate =
+            total > 0
             ? Math.round((success / total) * 100)
             : 0
 
+        const runningEl = document.getElementById("running")
+        const queuedEl = document.getElementById("queued")
+        const failedEl = document.getElementById("failed")
+        const successEl = document.getElementById("success")
 
-        document.getElementById("running").innerText = running
-        document.getElementById("queued").innerText = queued
-        document.getElementById("failed").innerText = failed
-        document.getElementById("success").innerText = rate + "%"
+        if(runningEl) runningEl.innerText = running
+        if(queuedEl) queuedEl.innerText = queued
+        if(failedEl) failedEl.innerText = failed
+        if(successEl) successEl.innerText = rate + "%"
 
     }
 
