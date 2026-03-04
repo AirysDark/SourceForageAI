@@ -1,28 +1,25 @@
 name: AI Knowledge Brain Trainer
 
 on:
-schedule:
-- cron: "0 2 * * *"
-workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
 
 jobs:
+  train-brain:
+    runs-on: ubuntu-latest
 
-train-brain:
+    steps:
+      - uses: actions/checkout@v4
 
-runs-on: ubuntu-latest
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-steps:
+      - name: Install dependencies
+        run: |
+          pip install requests
 
-  - uses: actions/checkout@v4
-
-  - uses: actions/setup-python@v5
-    with:
-      python-version: "3.11"
-
-  - name: Install dependencies
-    run: |
-      pip install requests
-
-  - name: Train knowledge brain
-    run: |
-      python tools/build/knowledge_brain/train_brain.py || true
+      - name: Train knowledge brain
+        run: |
+          python tools/build/knowledge_brain/train_brain.py || true
