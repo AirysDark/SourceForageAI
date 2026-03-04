@@ -8,11 +8,14 @@ on:
       - ".github/workflows/test.yml"
 
 jobs:
+
   test:
 
     runs-on: ubuntu-latest
-
     timeout-minutes: 10
+
+    permissions:
+      contents: write
 
     steps:
 
@@ -39,15 +42,61 @@ jobs:
           python tools/test_report.py || true
 
 
-      - name: Show report file
+      - name: Show report
         run: |
           echo "---- SYSTEM TEST REPORT ----"
           cat system_test_report.json || echo "Report not generated"
 
 
-      - name: Upload test report
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Zip report
+        run: |
+          zip sourceforage-test-report.zip system_test_report.json
+
+
+      - name: Generate release info
+        run: |
+          DATE=$(date "+%Y-%m-%d %H:%M:%S")
+
+          echo "RELEASE_TITLE=$DATE" >> $GITHUB_ENV
+          echo "RELEASE_TAG=SourceForageAI-System-Test" >> $GITHUB_ENV
+
+          echo "Parsing errors..."
+
+          ERRORS=$(python - <<EOF
+import json
+
+try:
+    r=json.load(open("system_test_report.json"))
+    errors=[]
+    errors+=r.get("module_failures",[])
+    errors+=r.get("build_module_failures",[])
+    errors+=r.get("yaml_failures",[])
+
+    if not errors:
+        print("No errors detected")
+    else:
+        for e in errors[:20]:
+            print(e)
+
+except:
+    print("Report parsing failed")
+EOF
+)
+
+          echo "RELEASE_BODY<<EOF" >> $GITHUB_ENV
+          echo "SourceForageAI System Test Report" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "Run Time: $DATE" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "Key Errors:" >> $GITHUB_ENV
+          echo "$ERRORS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
         with:
-          name: sourceforage-test-report
-          path: system_test_report.json
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TITLE }}
+          body: ${{ env.RELEASE_BODY }}
+          files: sourceforage-test-report.zip
