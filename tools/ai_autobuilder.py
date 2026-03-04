@@ -1,159 +1,160 @@
 #!/usr/bin/env python3
-import os, sys, subprocess, json, tempfile, re, pathlib
 
-PROVIDER = os.getenv("PROVIDER", "openai")  # default to openai now
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-MAX_ATTEMPTS = int(os.getenv("AI_BUILDER_ATTEMPTS", "3"))
-BUILD_CMD = os.getenv("BUILD_CMD", "make -j")
-PROJECT_ROOT = pathlib.Path(os.getenv("PROJECT_ROOT", ".")).resolve()
+import sys
+from pathlib import Path
 
-PROMPT = """You are an automated build fixer. You are working in a Git repository.
-Goal: Fix build/test failures by editing files.
+from ai_config import MAX_ATTEMPTS, BUILD_CMD, BUSYBOX_HINT
+from ai_repo import get_repo_tree, get_recent_diff, tail_build_log
+from ai_build import run_build
+from ai_llm import call_llm
+from ai_patch import extract_unified_diff, apply_patch
 
-Repository summary:
+# build intelligence
+from build.detect import detect_build_type
+from build.knowledge import record
+from build.websearch import search_build_fix
+
+# self-training memory
+from ai_memory.memory import store_failure, store_fix, search_memory
+
+PROJECT_ROOT = Path(".")
+
+
+PROMPT = """You are an automated build fixer working in a Git repository.
+
+Goal:
+Fix build failures by editing files.
+
+Detected build system:
+{build_type}
+
+Repository files:
 {repo_tree}
 
-Recent changes (git diff HEAD~5..HEAD, if any):
+Recent git diff:
 {recent_diff}
 
 Build command:
 {build_cmd}
 
-Build log (last 400 lines, most recent first):
+Build log:
 {build_tail}
 
-Key constraints:
-- Return ONLY a valid unified diff starting with '---' and '+++' chunks.
-- Do not include explanations outside of the diff.
-- Keep edits minimal and safe.
-- If config/tooling changes are needed (e.g., CMake/Gradle/PlatformIO), include those file changes in the diff.
+Project notes:
+{project_hint}
 
-Now propose a patch as unified diff to fix the error.
+Web hint (if available):
+{web_hint}
+
+Rules:
+- Return ONLY a unified diff
+- Start with --- and +++
+- Minimal safe edits
+- Prefer fixing configuration or build scripts
 """
 
-def run(cmd, cwd=PROJECT_ROOT, capture=False, check=False):
-    if capture:
-        return subprocess.run(cmd, cwd=cwd, shell=True, text=True,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=check)
-    else:
-        return subprocess.run(cmd, cwd=cwd, shell=True, check=check)
 
-def git(*args, capture=False):
-    return run("git " + " ".join(args), capture=capture)
+def extract_first_error(log):
 
-def get_repo_tree():
-    out = run("git ls-files || true", capture=True)
-    files = out.stdout.strip().splitlines()
-    return "\n".join(files[:200])
+    """Try to extract the most useful error line"""
 
-def get_recent_diff():
-    out = run("git log --oneline -n 1 || true", capture=True)
-    if out.stdout.strip() == "":
-        return "(no recent commits)"
-    diff = run("git diff --unified=2 -M -C HEAD~5..HEAD || true", capture=True)
-    return diff.stdout[-8000:]
+    lines = log.split("\n")
 
-def tail_build_log(lines=400):
-    p = pathlib.Path("build.log")
-    if not p.exists():
-        return "(no build log)"
-    data = p.read_text(errors="ignore").splitlines()
-    return "\n".join(data[-lines:])
+    for l in reversed(lines):
+        if "error" in l.lower():
+            return l
 
-def run_build():
-    with open("build.log", "wb") as f:
-        p = subprocess.Popen(BUILD_CMD, cwd=PROJECT_ROOT, shell=True,
-                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        for line in p.stdout:
-            sys.stdout.buffer.write(line)
-            f.write(line)
-    return p.wait()
+    return lines[-1] if lines else ""
 
-def call_llm(prompt):
-    import requests
-    key = os.environ["OPENAI_API_KEY"]
-    url = "https://api.openai.com/v1/chat/completions"
-    payload = {
-        "model": OPENAI_MODEL,
-        "messages": [{"role":"user","content":prompt}],
-        "temperature": 0.2
-    }
-    r = requests.post(url, headers={"Authorization": f"Bearer {key}",
-                                    "Content-Type":"application/json"}, json=payload, timeout=180)
-    r.raise_for_status()
-    return r.json()["choices"][0]["message"]["content"]
-
-def extract_unified_diff(text):
-    m = re.search(r'(?ms)^--- [^\n]+\n\+\+\+ [^\n]+\n', text)
-    if not m:
-        return None
-    start = m.start()
-    return text[start:].strip()
-
-def apply_patch(diff_text):
-    tmp = tempfile.NamedTemporaryFile("w", delete=False, suffix=".patch")
-    tmp.write(diff_text)
-    tmp.close()
-    try:
-        git("add", "-A")
-        run("git diff --staged > .pre_ai_fix.patch || true")
-        run(f"git apply --reject --whitespace=fix {tmp.name}", capture=True)
-        git("add", "-A")
-        run('git commit -m "ai-autobuilder: apply automatic fix" || true')
-        return True
-    except Exception as e:
-        print("Patch apply failed:", e)
-        return False
-    finally:
-        os.unlink(tmp.name)
 
 def main():
+
     print("== AI Autobuilder ==")
-    print("Project:", PROJECT_ROOT)
-    if not (PROJECT_ROOT / ".git").exists():
-        run("git init")
-        run('git config user.name "ai-autobuilder"')
-        run('git config user.email "ai-autobuilder@local"')
-        git("add", "-A")
-        run('git commit -m "ai-autobuilder: initial snapshot" || true')
+
+    # detect build system
+    build_type = detect_build_type(PROJECT_ROOT)
+
+    print(f"Detected build system: {build_type}")
 
     code = run_build()
+
+    log_tail = tail_build_log()
+
+    # record run
+    record(build_type, code == 0, log_tail)
+
     if code == 0:
-        print("✅ Build already succeeds. Nothing to do.")
+        print("Build already works.")
         return 0
 
+    # store failure for training
+    store_failure(build_type, log_tail)
+
     attempts = 0
+
     while attempts < MAX_ATTEMPTS:
+
         attempts += 1
-        print(f"\n== Attempt {attempts}/{MAX_ATTEMPTS} ==")
-        prompt = PROMPT.format(
-            repo_tree=get_repo_tree(),
-            recent_diff=get_recent_diff(),
-            build_cmd=BUILD_CMD,
-            build_tail=tail_build_log()
-        )
-        llm_out = call_llm(prompt)
-        diff = extract_unified_diff(llm_out)
+
+        print(f"\nAttempt {attempts}/{MAX_ATTEMPTS}")
+
+        log_tail = tail_build_log()
+
+        # check memory first
+        mem_patch = search_memory(log_tail)
+
+        if mem_patch:
+            print("Found matching fix in local memory.")
+            diff = mem_patch
+        else:
+
+            web_hint = ""
+
+            try:
+                err = extract_first_error(log_tail)
+                web_hint = search_build_fix(err)
+            except Exception:
+                pass
+
+            prompt = PROMPT.format(
+                build_type=build_type,
+                repo_tree=get_repo_tree(),
+                recent_diff=get_recent_diff(),
+                build_cmd=BUILD_CMD,
+                build_tail=log_tail,
+                project_hint=BUSYBOX_HINT if build_type == "busybox" else "",
+                web_hint=web_hint
+            )
+
+            llm_out = call_llm(prompt)
+
+            diff = extract_unified_diff(llm_out)
+
         if not diff:
-            print("LLM did not return a unified diff. Aborting this attempt.")
+            print("No valid patch returned.")
             break
 
-        print("\n--- Proposed diff (truncated) ---\n")
+        print("\nPatch preview:\n")
         print(diff[:1500])
-        print("\n--- end preview ---\n")
 
         if not apply_patch(diff):
-            print("Could not apply patch. Stopping.")
+            print("Patch failed to apply.")
             break
 
+        # save successful fix
+        store_fix(diff)
+
         code = run_build()
+
+        record(build_type, code == 0, tail_build_log())
+
         if code == 0:
-            print("✅ Build fixed!")
+            print("Build fixed!")
             return 0
 
-    print("❌ Still failing after attempts.")
-    print("Check build.log and .pre_ai_fix.patch to revert:  git apply -R .pre_ai_fix.patch")
+    print("Still failing.")
     return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())
