@@ -20,6 +20,14 @@ from build.universal_engine import detect_build_system
 # repository intelligence scanner
 from build.repo_intelligence import predict_build
 
+# build synthesizer
+from build.build_synthesizer import try_commands
+
+# Knowledge Brain
+from build.knowledge_brain import extract_features
+from build.knowledge_brain import predict_command
+from build.knowledge_brain import learn_success
+
 # self-training memory
 from ai_memory.memory import store_failure, store_fix, search_memory
 
@@ -109,47 +117,25 @@ def resolve_build_system():
 
 
 # ---------------------------------------------------
-# Determine build command
-# ---------------------------------------------------
-
-def resolve_build_command():
-
-    try:
-
-        predicted = predict_build()
-
-        if predicted:
-
-            print(f"Predicted build command: {predicted}")
-
-            return predicted
-
-    except Exception:
-        pass
-
-    return BUILD_CMD
-
-
-# ---------------------------------------------------
 # Attempt to reuse successful build references
 # ---------------------------------------------------
 
-def try_success_memory():
+def try_success_memory(repo_tree):
 
     try:
-
-        repo_tree = get_repo_tree()
 
         success = search_success(repo_tree)
 
         if success:
 
-            print("Found successful build reference")
+            print("[Memory] Found successful build reference")
 
             cmd = success.get("build_command")
 
             if cmd:
-                print(f"Using stored command: {cmd}")
+
+                print(f"[Memory] Using stored command: {cmd}")
+
                 return cmd
 
     except Exception:
@@ -159,12 +145,94 @@ def try_success_memory():
 
 
 # ---------------------------------------------------
-# AI repair loop
+# Knowledge Brain prediction
+# ---------------------------------------------------
+
+def try_knowledge_brain():
+
+    try:
+
+        features = extract_features(PROJECT_ROOT)
+
+        cmd = predict_command(features)
+
+        if cmd:
+
+            print(f"[KnowledgeBrain] Predicted command: {cmd}")
+
+            return cmd
+
+    except Exception:
+        pass
+
+    return None
+
+
+# ---------------------------------------------------
+# Repository intelligence prediction
+# ---------------------------------------------------
+
+def try_repo_intelligence():
+
+    try:
+
+        predicted = predict_build()
+
+        if predicted:
+
+            print(f"[RepoScanner] Predicted command: {predicted}")
+
+            return predicted
+
+    except Exception:
+        pass
+
+    return None
+
+
+# ---------------------------------------------------
+# Resolve final build command
+# ---------------------------------------------------
+
+def determine_build_command(repo_tree):
+
+    # 1 Success memory
+    cmd = try_success_memory(repo_tree)
+
+    if cmd:
+        return cmd
+
+    # 2 Knowledge Brain
+    cmd = try_knowledge_brain()
+
+    if cmd:
+        return cmd
+
+    # 3 Repo intelligence
+    cmd = try_repo_intelligence()
+
+    if cmd:
+        return cmd
+
+    # 4 Synthesizer fallback
+    print("[Synthesizer] Attempting command discovery...")
+
+    cmd = try_commands(PROJECT_ROOT)
+
+    if cmd:
+        return cmd
+
+    # 5 Final fallback
+    return BUILD_CMD
+
+
+# ---------------------------------------------------
+# Main AI repair loop
 # ---------------------------------------------------
 
 def main():
 
-    print("== AI Autobuilder ==")
+    print("\n== SourceForageAI Autobuilder ==\n")
 
     repo_tree = get_repo_tree()
 
@@ -174,23 +242,15 @@ def main():
 
     build_type = resolve_build_system()
 
-    print(f"Detected build system: {build_type}")
+    print(f"[Detector] Build system: {build_type}")
 
     # ------------------------------------------------
-    # Try success memory
+    # Determine build command
     # ------------------------------------------------
 
-    build_cmd = try_success_memory()
+    build_cmd = determine_build_command(repo_tree)
 
-    # ------------------------------------------------
-    # Predict command if memory not found
-    # ------------------------------------------------
-
-    if not build_cmd:
-
-        build_cmd = resolve_build_command()
-
-    print(f"Using build command: {build_cmd}")
+    print(f"[Builder] Using command: {build_cmd}")
 
     # ------------------------------------------------
     # First build attempt
@@ -206,21 +266,24 @@ def main():
         pass
 
     # ------------------------------------------------
-    # If build already works
+    # Build succeeded immediately
     # ------------------------------------------------
 
     if code == 0:
 
-        print("Build already works.")
+        print("[Builder] Build succeeded immediately")
 
         try:
-
             store_success(
                 repo_tree,
                 build_cmd,
                 build_type,
                 log_tail
             )
+
+            # teach knowledge brain
+            features = extract_features(PROJECT_ROOT)
+            learn_success(features, build_cmd)
 
         except Exception:
             pass
@@ -246,14 +309,14 @@ def main():
 
         attempts += 1
 
-        print(f"\nAttempt {attempts}/{MAX_ATTEMPTS}")
+        print(f"\n[AI] Attempt {attempts}/{MAX_ATTEMPTS}")
 
         log_tail = tail_build_log()
 
         diff = None
 
         # ------------------------------------------------
-        # Try memory fixes first
+        # Try memory fixes
         # ------------------------------------------------
 
         try:
@@ -263,7 +326,7 @@ def main():
 
         if mem_patch:
 
-            print("Found matching fix in local memory.")
+            print("[Memory] Using stored patch")
 
             diff = mem_patch
 
@@ -271,26 +334,18 @@ def main():
 
             web_hint = ""
 
-            # --------------------------------------------
-            # Web hint search
-            # --------------------------------------------
-
             try:
 
                 err = extract_first_error(log_tail)
 
                 if err:
 
-                    print("Searching web for hint...")
+                    print("[Search] Looking for solutions")
 
                     web_hint = search_build_fix(err)
 
             except Exception:
                 pass
-
-            # --------------------------------------------
-            # Build AI prompt
-            # --------------------------------------------
 
             prompt = PROMPT.format(
                 build_type=build_type,
@@ -302,23 +357,19 @@ def main():
                 web_hint=web_hint
             )
 
-            # --------------------------------------------
-            # Call AI model
-            # --------------------------------------------
-
             try:
 
                 llm_out = call_llm(prompt)
 
             except Exception as e:
 
-                print("AI call failed:", e)
+                print("[AI] Model failed:", e)
 
                 break
 
             if not llm_out:
 
-                print("AI returned empty response")
+                print("[AI] Empty response")
 
                 break
 
@@ -330,11 +381,11 @@ def main():
 
         if not diff:
 
-            print("No valid patch returned.")
+            print("[AI] No patch returned")
 
             break
 
-        print("\nPatch preview:\n")
+        print("\n[AI] Patch preview:\n")
 
         print(diff[:1500])
 
@@ -344,13 +395,9 @@ def main():
 
         if not apply_patch(diff):
 
-            print("Patch failed to apply.")
+            print("[AI] Patch failed to apply")
 
             break
-
-        # ------------------------------------------------
-        # Save patch
-        # ------------------------------------------------
 
         try:
             store_fix(diff)
@@ -370,13 +417,9 @@ def main():
         except Exception:
             pass
 
-        # ------------------------------------------------
-        # If build fixed
-        # ------------------------------------------------
-
         if code == 0:
 
-            print("Build fixed!")
+            print("[Builder] Build fixed successfully!")
 
             try:
 
@@ -387,12 +430,16 @@ def main():
                     log_tail
                 )
 
+                # teach knowledge brain
+                features = extract_features(PROJECT_ROOT)
+                learn_success(features, build_cmd)
+
             except Exception:
                 pass
 
             return 0
 
-    print("Still failing.")
+    print("[Builder] Build still failing")
 
     return 1
 

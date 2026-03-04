@@ -8,7 +8,7 @@ The project combines:
 - repository intelligence scanning
 - modular build engines
 - AI-generated build fixes
-- self-learning memory from successful builds
+- self-learning knowledge from successful builds
 
 The goal is to create a system capable of building most open-source repositories automatically (~95–98%) without manual configuration.
 
@@ -16,7 +16,7 @@ The goal is to create a system capable of building most open-source repositories
 
 Core Idea
 
-Open-source repositories use many different build systems:
+Open-source repositories use many different build systems, such as:
 
 - Make
 - CMake
@@ -27,24 +27,24 @@ Open-source repositories use many different build systems:
 - Bazel
 - Cargo
 - PlatformIO
-- Python (setup.py / pyproject)
-- Node (npm / yarn)
+- Python ("setup.py", "pyproject")
+- Node ("npm", "yarn")
 - Go
 - Rust
 - Android
-- custom scripts
+- custom build scripts
 
-SourceForageAI attempts to:
+SourceForageAI attempts to automatically:
 
-1. detect the build system
-2. predict the correct build command
-3. run the build
-4. analyze failures
-5. generate fixes
-6. retry automatically
-7. store successful builds as knowledge
+1. Detect the build system
+2. Predict the correct build command
+3. Execute the build
+4. Analyze failures
+5. Generate fixes using AI
+6. Retry the build
+7. Store successful builds as reusable knowledge
 
-Over time the system learns how different projects build and becomes better at handling new repositories.
+Over time the system learns how projects build and becomes better at handling new repositories.
 
 ---
 
@@ -52,7 +52,7 @@ Main Features
 
 Universal Build Detection
 
-The engine detects build systems using:
+SourceForageAI detects build systems using multiple signals:
 
 - repository structure
 - known indicator files
@@ -61,7 +61,7 @@ The engine detects build systems using:
 - modular build detectors
 - heuristics
 
-Indicator examples:
+Example indicator files:
 
 Makefile
 CMakeLists.txt
@@ -79,7 +79,7 @@ Detection modules live inside:
 
 tools/build/modules/
 
-Your project already contains hundreds of generated modules.
+The project already contains hundreds of generated modules.
 
 ---
 
@@ -90,19 +90,19 @@ SourceForageAI analyzes repositories to predict how they should be built.
 It scans:
 
 - README files
-- CI pipelines (.github/workflows)
+- CI pipelines (".github/workflows")
 - Dockerfiles
 - language patterns
 - dependency files
 - build scripts
 
-Files responsible for this:
+Key components:
 
 tools/build/repo_intelligence.py
 tools/build/repo_analyzer.py
 tools/build/heuristics.py
 
-This allows the system to determine build commands even when a module does not exist.
+This allows SourceForageAI to determine build commands even when a dedicated module does not exist.
 
 ---
 
@@ -114,7 +114,7 @@ Location:
 
 tools/build/modules/
 
-Each module contains:
+Each module defines:
 
 NAME
 INDICATORS
@@ -132,19 +132,21 @@ DEFAULT_COMMAND = "cmake -B build && cmake --build build"
 
 Because modules are isolated, new build systems can be added without modifying core code.
 
-Your current setup already contains hundreds of generated modules (~300+).
+Your current setup already contains 300+ generated modules.
 
 ---
 
 AI Build Repair
 
-If a build fails, SourceForageAI:
+If a build fails, SourceForageAI automatically attempts to repair it.
 
-1. extracts errors from build logs
-2. searches knowledge and web hints
-3. generates a patch using an LLM
-4. applies the patch
-5. retries the build
+Process:
+
+1. Extract errors from build logs
+2. Search internal knowledge and web hints
+3. Generate a patch using an LLM
+4. Apply the patch
+5. Retry the build
 
 The AI must return a unified diff patch, which is automatically applied.
 
@@ -180,23 +182,23 @@ Stores build errors and attempted fixes.
 
 Success Memory
 
-Stores only successful builds so the AI can reuse known working solutions.
+Stores successful builds so the AI can reuse working commands.
 
-This allows the system to improve over time.
+This allows the system to continuously improve over time.
 
 ---
 
 AI Model Support
 
-The AI system can use different model providers.
+SourceForageAI supports multiple AI model providers.
 
 Examples:
 
-OpenAI
-Ollama
-local LLMs
+- OpenAI
+- Ollama
+- local LLMs
 
-Configuration:
+Configuration files:
 
 tools/ai_models/config.py
 tools/ai_models/loader.py
@@ -209,19 +211,19 @@ deepseek-coder
 
 GitHub Automation
 
-SourceForageAI includes multiple GitHub workflows.
+SourceForageAI includes several automated workflows.
 
 Location:
 
 .github/workflows/
 
-Current workflows:
+---
 
 AI Autobuilder
 
 ai-autobuilder.yml
 
-Runs automatic build repair on repository pushes.
+Runs automatic build repair when repository changes occur.
 
 ---
 
@@ -229,7 +231,7 @@ AI Build Discovery
 
 ai-build-discovery.yml
 
-Discovers new build systems and generates modules.
+Discovers new build systems and generates additional modules.
 
 ---
 
@@ -237,7 +239,7 @@ AI Module Generator
 
 ai-module-generator.yml
 
-Creates additional build modules.
+Creates new modular build system plugins.
 
 ---
 
@@ -247,7 +249,7 @@ ai-remote-build.yml
 
 Allows building external GitHub repositories via manual input.
 
-User can provide:
+Users can provide:
 
 - repository
 - branch
@@ -332,12 +334,12 @@ python tools/ai_autobuilder.py
 
 The system will:
 
-1. detect build system
-2. predict build command
-3. run build
-4. analyze errors
-5. attempt automated fixes
-6. retry until success or attempts exhausted
+1. Detect the build system
+2. Predict the build command
+3. Run the build
+4. Analyze errors
+5. Attempt automated fixes
+6. Retry until success or attempt limits are reached
 
 ---
 
@@ -355,12 +357,12 @@ or
 
 https://github.com/owner/repo
 
-The system will automatically:
+SourceForageAI will automatically:
 
-- clone the repo
-- analyze it
+- clone the repository
+- analyze its structure
 - detect the build system
-- attempt to build it
+- attempt the build
 - repair failures
 
 ---
@@ -374,7 +376,7 @@ SourceForageAI aims to become an autonomous open-source build explorer capable o
 - learning from successful builds
 - expanding build system knowledge continuously
 
-Long-term goal:
+Long-term goal
 
 Automatically build the majority of open-source software.
 
@@ -390,10 +392,12 @@ Contributing
 
 Contributions are welcome.
 
-Areas of improvement:
+Areas for improvement include:
 
 - additional build modules
-- better repository intelligence
+- improved repository intelligence
 - smarter patch generation
-- improved build heuristics
+- better build heuristics
 - expanded AI memory learning
+
+Pull requests and ideas are welcome.

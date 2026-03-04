@@ -1,0 +1,19 @@
+name: AI Knowledge Export
+
+on:
+schedule:
+- cron: "0 6 * * 0"
+
+jobs:
+
+export-knowledge:
+
+runs-on: ubuntu-latest
+
+steps:
+
+  - uses: actions/checkout@v4
+
+  - name: Export knowledge
+    run: |
+      python tools/build/export_knowledge.py || true
