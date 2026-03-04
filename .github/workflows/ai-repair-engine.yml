@@ -26,10 +26,14 @@ jobs:
           pip install requests || true
 
 
+      # ------------------------------
+      # Download latest reports
+      # ------------------------------
+
       - name: Download latest reports
         run: |
 
-          mkdir reports
+          mkdir -p reports
           cd reports
 
           echo "Downloading latest recon report..."
@@ -44,32 +48,64 @@ jobs:
           https://github.com/${{ github.repository }}/releases/latest/download/sourceforage-test-report.zip \
           -o test.zip || true
 
-          unzip recon.zip || true
-          unzip test.zip || true
+          unzip -o recon.zip || true
+          unzip -o test.zip || true
 
           cd ..
 
 
+      # ------------------------------
+      # Run repair engine
+      # ------------------------------
+
       - name: Run repair engine
         run: |
-          python tools/repair/repair_engine.py
+          echo "Running SourceForageAI repair engine..."
+          python tools/repair/repair_engine.py || true
 
+
+      # ------------------------------
+      # Zip results
+      # ------------------------------
 
       - name: Zip repair results
         run: |
-          zip sourceforage-repair-results.zip repair_report.txt repaired_files/* || true
 
+          if [ -d repaired_files ]; then
+            zip -r sourceforage-repair-results.zip repair_report.txt repaired_files
+          else
+            echo "No repaired files found"
+            zip sourceforage-repair-results.zip repair_report.txt || true
+          fi
+
+
+      # ------------------------------
+      # Generate release body
+      # ------------------------------
 
       - name: Generate release body
         run: |
-          python tools/generate_release_body.py
+          python tools/generate_release_body.py \
+            --workflow "Repair Engine" \
+            --report repair_report.txt
 
+
+      # ------------------------------
+      # Generate timestamp
+      # ------------------------------
 
       - name: Generate timestamp
         run: |
-          echo "RELEASE_TITLE=Repair Engine - $(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
-          echo "RELEASE_TAG=Repair-Engine-$(date '+%Y%m%d-%H%M%S')" >> $GITHUB_ENV
+          DATE="$(date '+%Y-%m-%d %H:%M:%S')"
+          TAG="$(date '+%Y%m%d-%H%M%S')"
 
+          echo "RELEASE_TITLE=Repair Engine - $DATE" >> $GITHUB_ENV
+          echo "RELEASE_TAG=Repair-Engine-$TAG" >> $GITHUB_ENV
+
+
+      # ------------------------------
+      # Create GitHub release
+      # ------------------------------
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -79,6 +115,10 @@ jobs:
           body_path: release_body.txt
           files: sourceforage-repair-results.zip
 
+
+      # ------------------------------
+      # Upload artifacts
+      # ------------------------------
 
       - name: Upload repair artifacts
         uses: actions/upload-artifact@v4
