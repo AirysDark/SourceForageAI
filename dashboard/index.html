@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta charset="utf-8">
+<title>SourceForageAI Control Panel</title>
+
+<link rel="stylesheet" href="theme.css">
+
+</head>
+
+<body>
+
+<div class="topbar">
+
+<div>
+SourceForageAI Control Panel
+</div>
+
+<div>
+<span class="badge success">ONLINE</span>
+</div>
+
+</div>
+
+
+<div class="dashboard">
+
+
+<!-- LEFT PANEL -->
+
+<div class="card">
+
+<h3>Repository</h3>
+
+<input id="repo" placeholder="owner/repo">
+
+<h3>Actions</h3>
+
+<div class="workflow-buttons">
+
+<button onclick="runWorkflow('ai-autobuilder.yml')">
+Run Autobuilder
+</button>
+
+<button onclick="runWorkflow('ai-repo-crawler.yml')">
+Run Repo Crawler
+</button>
+
+<button onclick="runWorkflow('ai-module-expansion.yml')">
+Expand Modules
+</button>
+
+<button onclick="runWorkflow('ai-build-repair.yml')">
+Repair Build
+</button>
+
+<button onclick="runWorkflow('recon.yml')">
+Ultra Deep Recon
+</button>
+
+<button onclick="runWorkflow('test.yml')">
+System Test
+</button>
+
+</div>
+
+</div>
+
+
+<!-- CENTER PANEL -->
+
+<div class="card">
+
+<h3>Workflow Activity</h3>
+
+<pre id="logs">Loading workflow data...</pre>
+
+</div>
+
+
+<!-- RIGHT PANEL -->
+
+<div class="card">
+
+<h3>System Status</h3>
+
+<div class="status">
+
+<div>
+Running Builds:
+<span id="running" class="badge">0</span>
+</div>
+
+<div>
+Queued Builds:
+<span id="queued" class="badge warning">0</span>
+</div>
+
+<div>
+Failed Builds:
+<span id="failed" class="badge error">0</span>
+</div>
+
+<div>
+Success Rate:
+<span id="successRate" class="badge success">0%</span>
+</div>
+
+</div>
+
+</div>
+
+
+<div class="card">
+
+<h3>Recent Runs</h3>
+
+<div id="runs">
+
+Loading...
+
+</div>
+
+</div>
+
+
+</div>
+
+
+<div class="footer">
+
+SourceForageAI Build Intelligence System
+
+</div>
+
+
+<script src="app.js"></script>
+
+</body>
+</html>

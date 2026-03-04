@@ -1,0 +1,112 @@
+name: SourceForageAI Control Center
+
+on:
+  workflow_dispatch:
+    inputs:
+
+      action:
+        description: "Select AI task"
+        required: true
+        type: choice
+        options:
+          - autobuilder
+          - discovery
+          - module_generator
+          - repair
+          - crawler
+          - training
+          - brain_training
+          - export
+          - stats
+          - recon
+          - system_test
+
+      repository:
+        description: "Target repository (optional)"
+        required: false
+        type: string
+
+
+jobs:
+
+  dispatcher:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+
+      - name: Install dependencies
+        run: |
+          pip install requests pyyaml || true
+
+
+      - name: Clone repository
+        if: ${{ github.event.inputs.repository != '' }}
+        run: |
+          REPO="${{ github.event.inputs.repository }}"
+
+          if [[ "$REPO" == https://* ]]; then
+            git clone "$REPO" target_repo
+          else
+            git clone "https://github.com/$REPO.git" target_repo
+          fi
+
+
+      - name: Run AI task
+        run: |
+
+          case "${{ github.event.inputs.action }}" in
+
+            autobuilder)
+              cd target_repo || true
+              python ../tools/ai_autobuilder.py
+              ;;
+
+            discovery)
+              python tools/build/generate_build_modules.py
+              ;;
+
+            module_generator)
+              python tools/build/module_generator.py
+              ;;
+
+            repair)
+              python tools/ai/failure_analyzer.py
+              ;;
+
+            crawler)
+              python tools/build/repo_crawler.py
+              ;;
+
+            training)
+              python tools/build/knowledge_trainer.py
+              ;;
+
+            brain_training)
+              python tools/build/knowledge_brain/train_brain.py
+              ;;
+
+            export)
+              python tools/build/export_knowledge.py
+              ;;
+
+            stats)
+              python tools/build/build_stats.py
+              ;;
+
+            recon)
+              python tools/build/deep_intelligence_scanner.py
+              ;;
+
+            system_test)
+              python test.py
+              ;;
+
+          esac
