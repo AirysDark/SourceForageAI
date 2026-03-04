@@ -1,20 +1,56 @@
 import subprocess
 import shutil
+import json
 
 
-def call_local_model(prompt, model="deepseek-coder", timeout=300):
+def _check_ollama():
+
+    """Verify ollama binary exists"""
+
+    if not shutil.which("ollama"):
+        raise RuntimeError("Ollama is not installed or not in PATH")
+
+
+def _model_exists(model):
+
+    """Check if model is installed"""
+
+    try:
+        out = subprocess.check_output(
+            ["ollama", "list"],
+            text=True
+        )
+
+        return model in out
+
+    except Exception:
+        return False
+
+
+def call_local_model(
+    prompt,
+    model="deepseek-coder",
+    timeout=300,
+    max_chars=20000
+):
 
     """
-    Call a local Ollama model and return the response text.
+    Call a local Ollama model and return response text.
     """
 
     if not prompt:
         return ""
 
-    # verify ollama exists
-    if not shutil.which("ollama"):
-        print("Ollama not found in PATH")
+    _check_ollama()
+
+    if not _model_exists(model):
+
+        print(f"Model '{model}' not installed")
         return ""
+
+    # prevent huge prompts
+    if len(prompt) > max_chars:
+        prompt = prompt[:max_chars]
 
     try:
 
@@ -29,11 +65,16 @@ def call_local_model(prompt, model="deepseek-coder", timeout=300):
         if proc.returncode != 0:
 
             print("Local model error:")
-            print(proc.stderr)
+            print(proc.stderr.strip())
 
             return ""
 
-        return proc.stdout.strip()
+        output = proc.stdout.strip()
+
+        if not output:
+            print("Model returned empty response")
+
+        return output
 
     except subprocess.TimeoutExpired:
 
@@ -43,6 +84,6 @@ def call_local_model(prompt, model="deepseek-coder", timeout=300):
 
     except Exception as e:
 
-        print("Local model failed:", e)
+        print("Local model failed:", str(e))
 
         return ""

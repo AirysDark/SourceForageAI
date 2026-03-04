@@ -1,28 +1,89 @@
-import os, requests
-from ai_models.loader import call_local_model
-from ai_models.config import PROVIDER, LOCAL_MODEL
+import subprocess
+import shutil
+import json
 
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
-def call_openai(prompt):
-    key = os.environ["OPENAI_API_KEY"]
-    r = requests.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "model": OPENAI_MODEL,
-            "messages":[{"role":"user","content":prompt}],
-            "temperature":0.2
-        },
-        timeout=180
-    )
-    r.raise_for_status()
-    return r.json()["choices"][0]["message"]["content"]
+def _check_ollama():
 
-def call_llm(prompt):
-    if PROVIDER == "local":
-        return call_local_model(prompt, LOCAL_MODEL)
-    return call_openai(prompt)
+    """Verify ollama binary exists"""
+
+    if not shutil.which("ollama"):
+        raise RuntimeError("Ollama is not installed or not in PATH")
+
+
+def _model_exists(model):
+
+    """Check if model is installed"""
+
+    try:
+        out = subprocess.check_output(
+            ["ollama", "list"],
+            text=True
+        )
+
+        return model in out
+
+    except Exception:
+        return False
+
+
+def call_local_model(
+    prompt,
+    model="deepseek-coder",
+    timeout=300,
+    max_chars=20000
+):
+
+    """
+    Call a local Ollama model and return response text.
+    """
+
+    if not prompt:
+        return ""
+
+    _check_ollama()
+
+    if not _model_exists(model):
+
+        print(f"Model '{model}' not installed")
+        return ""
+
+    # prevent huge prompts
+    if len(prompt) > max_chars:
+        prompt = prompt[:max_chars]
+
+    try:
+
+        proc = subprocess.run(
+            ["ollama", "run", model],
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+
+        if proc.returncode != 0:
+
+            print("Local model error:")
+            print(proc.stderr.strip())
+
+            return ""
+
+        output = proc.stdout.strip()
+
+        if not output:
+            print("Model returned empty response")
+
+        return output
+
+    except subprocess.TimeoutExpired:
+
+        print("Local model timeout")
+
+        return ""
+
+    except Exception as e:
+
+        print("Local model failed:", str(e))
+
+        return ""

@@ -1,126 +1,57 @@
-import os
-import re
+import importlib.util
 from pathlib import Path
 
-BUILD_DIR = Path(__file__).parent
+
+MODULE_DIR = Path(__file__).parent / "modules"
 
 
-# -------------------------
-# Logging helper
-# -------------------------
+def load_module(path):
+    """Load a single module file"""
 
-def log(msg):
-    print(f"[module-generator] {msg}", flush=True)
+    spec = importlib.util.spec_from_file_location(path.stem, path)
 
+    module = importlib.util.module_from_spec(spec)
 
-# -------------------------
-# Safe module name
-# -------------------------
+    spec.loader.exec_module(module)
 
-def safe_name(name):
-
-    name = name.lower()
-
-    # replace invalid characters
-    name = re.sub(r"[^a-z0-9_]+", "_", name)
-
-    return name.strip("_")
+    return module
 
 
-# -------------------------
-# Module template
-# -------------------------
+def load_all_modules():
 
-TEMPLATE = """
-\"\"\"
-Auto-generated build module
+    modules = []
 
-Name: {name}
+    if not MODULE_DIR.exists():
+        return modules
 
-Indicators:
-{indicators}
+    for file in MODULE_DIR.glob("*.py"):
 
-Default command:
-{cmd}
-\"\"\"
+        try:
+            module = load_module(file)
+            modules.append(module)
 
-import os
-import subprocess
+        except Exception as e:
 
-NAME = "{name}"
+            print("Module load failed:", file, e)
 
-INDICATORS = {indicators}
-
-DEFAULT_COMMAND = "{cmd}"
+    return modules
 
 
-def detect(repo_root="."):
+def detect_build_system(repo_root="."):
 
-    for root, dirs, files in os.walk(repo_root):
+    modules = load_all_modules()
 
-        for f in files:
+    detected = []
 
-            if f in INDICATORS:
-                return True
+    for module in modules:
 
-    return False
+        if hasattr(module, "detect"):
 
+            try:
+                if module.detect(repo_root):
+                    detected.append(module)
 
-def build():
+            except Exception as e:
+                print("Detection error:", module.__name__, e)
 
-    print("Running build system:", NAME)
-
-    if DEFAULT_COMMAND:
-
-        subprocess.run(DEFAULT_COMMAND, shell=True)
-
-    else:
-
-        print("No default command defined")
-"""
-
-
-# -------------------------
-# Module creation
-# -------------------------
-
-def create_module(name, indicators, cmd):
-
-    if not name:
-        log("Invalid module name")
-        return None
-
-    module_name = safe_name(name)
-
-    filename = BUILD_DIR / f"{module_name}.py"
-
-    if filename.exists():
-
-        log(f"Module already exists: {module_name}.py")
-
-        return module_name
-
-    if not isinstance(indicators, list):
-        indicators = []
-
-    indicators = list(set(indicators))
-
-    code = TEMPLATE.format(
-        name=module_name,
-        indicators=indicators,
-        cmd=cmd or ""
-    )
-
-    try:
-
-        filename.write_text(code)
-
-        log(f"Created module: {filename}")
-
-        return module_name
-
-    except Exception as e:
-
-        log(f"Failed to create module: {e}")
-
-        return None
+    return detected
