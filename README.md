@@ -1,16 +1,22 @@
 SourceForageAI
 
-SourceForageAI is an autonomous build discovery and repair system designed to automatically analyze, detect, build, and repair open-source repositories with minimal configuration.
+SourceForageAI is an autonomous system designed to discover, analyze, build, and repair open-source repositories automatically.
 
-The project combines repository structure analysis, modular build detection, AI-assisted patching, and self-learning memory to make building unfamiliar codebases dramatically easier.
+The project combines:
 
-SourceForageAI can automatically attempt to build most open-source repositories, diagnose failures, generate fixes, and learn from successful builds to improve future results.
+- automatic build system detection
+- repository intelligence scanning
+- modular build engines
+- AI-generated build fixes
+- self-learning memory from successful builds
+
+The goal is to create a system capable of building most open-source repositories automatically (~95–98%) without manual configuration.
 
 ---
 
-Overview
+Core Idea
 
-Modern open-source projects use many different build systems:
+Open-source repositories use many different build systems:
 
 - Make
 - CMake
@@ -21,30 +27,41 @@ Modern open-source projects use many different build systems:
 - Bazel
 - Cargo
 - PlatformIO
-- Python
-- Node
+- Python (setup.py / pyproject)
+- Node (npm / yarn)
 - Go
-- and many more.
+- Rust
+- Android
+- custom scripts
 
-SourceForageAI attempts to identify the correct build system automatically, run the build, analyze failures, and repair issues using AI and learned build knowledge.
+SourceForageAI attempts to:
 
-The system is designed to approach ~95–98% automatic build compatibility across public repositories.
+1. detect the build system
+2. predict the correct build command
+3. run the build
+4. analyze failures
+5. generate fixes
+6. retry automatically
+7. store successful builds as knowledge
+
+Over time the system learns how different projects build and becomes better at handling new repositories.
 
 ---
 
-Key Features
+Main Features
 
 Universal Build Detection
 
-Automatically detects build systems using:
+The engine detects build systems using:
 
 - repository structure
-- indicator files
-- CI configuration
+- known indicator files
+- CI configurations
 - README instructions
 - modular build detectors
+- heuristics
 
-Example indicator files:
+Indicator examples:
 
 Makefile
 CMakeLists.txt
@@ -54,16 +71,50 @@ pom.xml
 meson.build
 WORKSPACE
 platformio.ini
+package.json
+setup.py
+pyproject.toml
 
----
-
-Modular Build System Architecture
-
-Build systems are implemented as plugins inside:
+Detection modules live inside:
 
 tools/build/modules/
 
-Each module defines:
+Your project already contains hundreds of generated modules.
+
+---
+
+Repository Intelligence Scanner
+
+SourceForageAI analyzes repositories to predict how they should be built.
+
+It scans:
+
+- README files
+- CI pipelines (.github/workflows)
+- Dockerfiles
+- language patterns
+- dependency files
+- build scripts
+
+Files responsible for this:
+
+tools/build/repo_intelligence.py
+tools/build/repo_analyzer.py
+tools/build/heuristics.py
+
+This allows the system to determine build commands even when a module does not exist.
+
+---
+
+Modular Build System
+
+Build systems are implemented as plugins.
+
+Location:
+
+tools/build/modules/
+
+Each module contains:
 
 NAME
 INDICATORS
@@ -71,7 +122,7 @@ DEFAULT_COMMAND
 detect()
 build()
 
-Example:
+Example module:
 
 NAME = "cmake"
 
@@ -79,192 +130,76 @@ INDICATORS = ["CMakeLists.txt"]
 
 DEFAULT_COMMAND = "cmake -B build && cmake --build build"
 
-This makes it easy to add support for new build systems.
+Because modules are isolated, new build systems can be added without modifying core code.
+
+Your current setup already contains hundreds of generated modules (~300+).
 
 ---
 
-Repository Intelligence Scanner
+AI Build Repair
 
-SourceForageAI scans repositories for build hints from:
+If a build fails, SourceForageAI:
 
-- directory structure
-- README instructions
-- GitHub Actions / CI pipelines
-- language detection
-- dependency files
+1. extracts errors from build logs
+2. searches knowledge and web hints
+3. generates a patch using an LLM
+4. applies the patch
+5. retries the build
 
-This allows the system to predict build commands even when no module exists.
+The AI must return a unified diff patch, which is automatically applied.
 
----
+Core file:
 
-AI-Driven Build Repair
+tools/ai_autobuilder.py
 
-If a build fails, SourceForageAI can:
+Supporting modules:
 
-1. analyze the build log
-2. extract the error
-3. search for solutions
-4. generate a patch
-5. apply the patch
-6. retry the build
-
-The AI returns a unified diff patch which is automatically applied.
+tools/ai_build.py
+tools/ai_patch.py
+tools/ai_repo.py
+tools/ai_llm.py
 
 ---
 
 Self-Learning Memory
 
-SourceForageAI stores successful fixes in a local memory database:
+The system stores build knowledge in:
 
-tools/ai_memory/db.json
+tools/ai_memory/
 
-The system remembers:
+Files:
 
-- build failures
-- generated fixes
-- successful patches
+memory.py
+success_db.json
 
-Future builds can reuse these solutions automatically.
+Two types of memory exist:
 
----
+Failure Memory
 
-Successful Build Memory
+Stores build errors and attempted fixes.
 
-A special memory store records only successful builds so they can be reused as references for similar repositories.
+Success Memory
+
+Stores only successful builds so the AI can reuse known working solutions.
 
 This allows the system to improve over time.
 
 ---
 
-GitHub Automation
+AI Model Support
 
-The project includes multiple GitHub workflows that allow the AI to operate automatically.
+The AI system can use different model providers.
 
 Examples:
 
-Workflow| Purpose
-AI Autobuilder| Builds and repairs repositories
-AI Remote Build Lab| Builds external repositories
-AI Build Discovery| Expands build system modules
-AI Training| Improves build knowledge
-AI Maintenance| Cleans logs and temporary files
-AI Module Generator| Generates new build modules
-
----
-
-Project Structure
-
-SourceForageAI
-│
-├── tools
-│   │
-│   ├── ai_autobuilder.py
-│   ├── ai_build.py
-│   ├── ai_patch.py
-│   ├── ai_repo.py
-│   ├── ai_llm.py
-│   │
-│   ├── ai_memory
-│   │   └── db.json
-│   │
-│   └── build
-│       │
-│       ├── detect.py
-│       ├── universal_engine.py
-│       ├── repo_intelligence.py
-│       ├── websearch.py
-│       ├── knowledge.py
-│       │
-│       └── modules
-│           ├── make.py
-│           ├── cmake.py
-│           ├── gradle.py
-│           ├── cargo.py
-│           ├── bazel.py
-│           └── ...
-│
-├── .github
-│   └── workflows
-│
-└── README.md
-
----
-
-Installation
-
-Clone the repository:
-
-git clone https://github.com/YOURNAME/SourceForageAI.git
-cd SourceForageAI
-
-Install dependencies:
-
-pip install requests
-
-Optional system dependencies:
-
-sudo apt install build-essential cmake git
-
----
-
-Running SourceForageAI
-
-Run the AI autobuilder:
-
-python tools/ai_autobuilder.py
-
-The system will:
-
-1. detect the build system
-2. run the build
-3. analyze failures
-4. attempt automatic repairs
-5. retry until successful or attempts exhausted
-
----
-
-Remote Repository Builds
-
-SourceForageAI can also attempt to build external repositories automatically using the GitHub workflow:
-
-AI Remote Build Lab
-
-Input fields allow specifying:
-
-- repository
-- branch
-- optional build hints
-- optional custom commands
-
----
-
-Adding a New Build System
-
-Create a new module inside:
-
-tools/build/modules/
-
-Example:
-
-NAME = "meson"
-
-INDICATORS = ["meson.build"]
-
-DEFAULT_COMMAND = "meson setup build && ninja -C build"
-
-The detector will automatically load it.
-
-No core code changes required.
-
----
-
-AI Model Support
-
-SourceForageAI supports multiple providers:
-
 OpenAI
 Ollama
-Local LLMs
+local LLMs
+
+Configuration:
+
+tools/ai_models/config.py
+tools/ai_models/loader.py
 
 Example local model:
 
@@ -272,37 +207,176 @@ deepseek-coder
 
 ---
 
-Goals
+GitHub Automation
 
-SourceForageAI aims to create a fully autonomous build system explorer capable of:
+SourceForageAI includes multiple GitHub workflows.
 
-- building unknown repositories
-- repairing broken builds
-- learning from successful builds
-- expanding its own build knowledge
+Location:
 
-Long term vision:
+.github/workflows/
 
-Automatically build most of the open-source ecosystem.
+Current workflows:
+
+AI Autobuilder
+
+ai-autobuilder.yml
+
+Runs automatic build repair on repository pushes.
 
 ---
 
-Status
+AI Build Discovery
 
-Current capabilities:
+ai-build-discovery.yml
 
-- modular build detection
-- AI build repair
-- GitHub automation
-- repository intelligence scanning
-- self-learning memory
-- automatic module generation
+Discovers new build systems and generates modules.
 
-Development continues to improve:
+---
 
-- build coverage
-- repair accuracy
-- knowledge reuse
+AI Module Generator
+
+ai-module-generator.yml
+
+Creates additional build modules.
+
+---
+
+AI Remote Build Lab
+
+ai-remote-build.yml
+
+Allows building external GitHub repositories via manual input.
+
+User can provide:
+
+- repository
+- branch
+- build hints
+- custom commands
+- workflow options
+
+---
+
+AI Training
+
+ai-training.yml
+
+Improves build knowledge and heuristics.
+
+---
+
+AI Maintenance
+
+ai-maintenance.yml
+
+Cleans logs and temporary files.
+
+---
+
+Project Structure
+
+SourceForageAI
+│
+├── .github
+│   └── workflows
+│       ├── ai-autobuilder.yml
+│       ├── ai-build-discovery.yml
+│       ├── ai-maintenance.yml
+│       ├── ai-module-generator.yml
+│       ├── ai-remote-build.yml
+│       └── ai-training.yml
+│
+├── tools
+│   │
+│   ├── ai_autobuilder.py
+│   ├── ai_build.py
+│   ├── ai_config.py
+│   ├── ai_llm.py
+│   ├── ai_patch.py
+│   ├── ai_repo.py
+│   │
+│   ├── ai_memory
+│   │   ├── memory.py
+│   │   └── success_db.json
+│   │
+│   ├── ai_models
+│   │   ├── config.py
+│   │   └── loader.py
+│   │
+│   └── build
+│       │
+│       ├── modules
+│       │   └── (hundreds of build system modules)
+│       │
+│       ├── detect.py
+│       ├── heuristics.py
+│       ├── knowledge.py
+│       ├── module_generator.py
+│       ├── module_learning.py
+│       ├── repo_analyzer.py
+│       ├── repo_intelligence.py
+│       ├── resolve.py
+│       ├── universal_detector.py
+│       ├── universal_engine.py
+│       └── websearch.py
+│
+└── README.md
+
+---
+
+Running Locally
+
+Run the autobuilder:
+
+python tools/ai_autobuilder.py
+
+The system will:
+
+1. detect build system
+2. predict build command
+3. run build
+4. analyze errors
+5. attempt automated fixes
+6. retry until success or attempts exhausted
+
+---
+
+Remote Repository Builds
+
+Using the workflow:
+
+AI Remote Build Lab
+
+You can enter a repository such as:
+
+owner/repo
+
+or
+
+https://github.com/owner/repo
+
+The system will automatically:
+
+- clone the repo
+- analyze it
+- detect the build system
+- attempt to build it
+- repair failures
+
+---
+
+Vision
+
+SourceForageAI aims to become an autonomous open-source build explorer capable of:
+
+- building unknown repositories automatically
+- repairing broken builds
+- learning from successful builds
+- expanding build system knowledge continuously
+
+Long-term goal:
+
+Automatically build the majority of open-source software.
 
 ---
 
@@ -316,17 +390,10 @@ Contributing
 
 Contributions are welcome.
 
-You can help by:
+Areas of improvement:
 
-- adding new build modules
-- improving repository intelligence
-- expanding repair strategies
-- testing against more repositories
-
----
-
-Name
-
-SourceForageAI
-
-The system forages through source code repositories, discovering how to build them automatically.
+- additional build modules
+- better repository intelligence
+- smarter patch generation
+- improved build heuristics
+- expanded AI memory learning
