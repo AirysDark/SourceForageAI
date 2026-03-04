@@ -1,19 +1,16 @@
 name: AI Build Statistics
 
 on:
-schedule:
-- cron: "0 1 * * *"
+  schedule:
+    - cron: "0 1 * * *"
 
 jobs:
+  stats:
+    runs-on: ubuntu-latest
 
-stats:
+    steps:
+      - uses: actions/checkout@v4
 
-runs-on: ubuntu-latest
-
-steps:
-
-  - uses: actions/checkout@v4
-
-  - name: Generate stats
-    run: |
-      python tools/build/build_stats.py || true
+      - name: Generate stats
+        run: |
+          python tools/build/build_stats.py || true
