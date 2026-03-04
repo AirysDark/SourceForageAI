@@ -19,14 +19,15 @@ jobs:
           sudo apt-get install -y \
             tree unzip file binutils coreutils \
             build-essential cmake ninja-build \
-            meson bison flex wget
+            meson bison flex wget graphviz
 
           python -m pip install --upgrade pip
-          pip install requests || true
+          pip install requests networkx || true
 
       - name: Run Ultra Deep Scan
         run: |
           REPORT="ultra_recon.txt"
+          JSON="repo_intelligence.json"
 
           echo "=========================================" > $REPORT
           echo " ULTRA DEEP RECON REPORT" >> $REPORT
@@ -61,6 +62,9 @@ jobs:
           echo -e "\n=== PYTHON FUNCTIONS ===" >> $REPORT
           grep -R "def " --include="*.py" . >> $REPORT || true
 
+          echo -e "\n=== PYTHON ENTRYPOINTS ===" >> $REPORT
+          grep -R "__main__" --include="*.py" . >> $REPORT || true
+
           echo -e "\n=== SHELL SCRIPTS ===" >> $REPORT
           find . -name "*.sh" >> $REPORT || true
 
@@ -74,6 +78,38 @@ jobs:
           find . -name "requirements.txt" >> $REPORT || true
           find . -name "poetry.lock" >> $REPORT || true
 
+          echo -e "\n=== GENERATING MACHINE INTELLIGENCE JSON ===" >> $REPORT
+
+          python << 'PY'
+import json
+from pathlib import Path
+
+root = Path(".")
+data = {
+    "python_files": [],
+    "imports": {},
+    "entrypoints": [],
+}
+
+for f in root.rglob("*.py"):
+    data["python_files"].append(str(f))
+
+    imports = []
+    for line in f.read_text(errors="ignore").splitlines():
+        if line.strip().startswith("import "):
+            imports.append(line.strip())
+        if line.strip().startswith("from "):
+            imports.append(line.strip())
+        if "__main__" in line:
+            data["entrypoints"].append(str(f))
+
+    data["imports"][str(f)] = imports
+
+Path("repo_intelligence.json").write_text(
+    json.dumps(data, indent=2)
+)
+PY
+
           echo -e "\n=========================================" >> $REPORT
           echo " RECON COMPLETE" >> $REPORT
           echo "=========================================" >> $REPORT
@@ -82,4 +118,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ultra-deep-recon-report
-          path: ultra_recon.txt
+          path: |
+            ultra_recon.txt
+            repo_intelligence.json
