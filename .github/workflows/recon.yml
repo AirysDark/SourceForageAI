@@ -52,14 +52,14 @@ jobs:
           find . -name "*.py" >> $REPORT || true
 
           echo -e "\n=== PYTHON IMPORT GRAPH ===" >> $REPORT
-          grep -R "import " --include="*.py" . >> $REPORT || true
-          grep -R "from .* import" --include="*.py" . >> $REPORT || true
+          grep -R "^[[:space:]]*import " --include="*.py" . >> $REPORT || true
+          grep -R "^[[:space:]]*from .* import" --include="*.py" . >> $REPORT || true
 
           echo -e "\n=== PYTHON CLASSES ===" >> $REPORT
-          grep -R "class " --include="*.py" . >> $REPORT || true
+          grep -R "^[[:space:]]*class " --include="*.py" . >> $REPORT || true
 
           echo -e "\n=== PYTHON FUNCTIONS ===" >> $REPORT
-          grep -R "def " --include="*.py" . >> $REPORT || true
+          grep -R "^[[:space:]]*def " --include="*.py" . >> $REPORT || true
 
           echo -e "\n=== PYTHON ENTRYPOINTS ===" >> $REPORT
           grep -R "__main__" --include="*.py" . >> $REPORT || true
@@ -76,9 +76,15 @@ jobs:
           echo -e "\n=== REQUIREMENTS FILES ===" >> $REPORT
           find . -name "requirements.txt" >> $REPORT || true
           find . -name "poetry.lock" >> $REPORT || true
+          find . -name "Pipfile" >> $REPORT || true
 
           echo -e "\n=== GENERATING MACHINE INTELLIGENCE JSON ===" >> $REPORT
-          python tools/build/deep_intelligence_scanner.py || true
+
+          if [ -f tools/build/deep_intelligence_scanner.py ]; then
+            python tools/build/deep_intelligence_scanner.py || true
+          else
+            echo "{}" > repo_intelligence.json
+          fi
 
           echo -e "\n=========================================" >> $REPORT
           echo " RECON COMPLETE" >> $REPORT
@@ -91,3 +97,4 @@ jobs:
           path: |
             ultra_recon.txt
             repo_intelligence.json
+          if-no-files-found: warn
