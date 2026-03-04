@@ -14,21 +14,46 @@ jobs:
 
     steps:
 
+      # ------------------------------------------------
+      # Checkout repository
+      # ------------------------------------------------
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
+      # ------------------------------------------------
+      # Setup Python
+      # ------------------------------------------------
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+
+      # ------------------------------------------------
+      # Install system tools
+      # ------------------------------------------------
+
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y unzip jq zip
+          sudo apt-get install -y unzip jq zip curl
+
           python -m pip install --upgrade pip
-          pip install requests || true
+
+          pip install \
+            requests \
+            psutil \
+            pyyaml \
+            networkx \
+            || true
 
 
-      # ------------------------------
+      # ------------------------------------------------
       # Download latest reports
-      # ------------------------------
+      # ------------------------------------------------
 
       - name: Download latest reports
         run: |
@@ -48,51 +73,78 @@ jobs:
           https://github.com/${{ github.repository }}/releases/latest/download/sourceforage-test-report.zip \
           -o test.zip || true
 
-          unzip -o recon.zip || true
-          unzip -o test.zip || true
+          if [ -f recon.zip ]; then
+            unzip -o recon.zip || true
+          fi
+
+          if [ -f test.zip ]; then
+            unzip -o test.zip || true
+          fi
 
           cd ..
 
 
-      # ------------------------------
+      # ------------------------------------------------
       # Run repair engine
-      # ------------------------------
+      # ------------------------------------------------
 
       - name: Run repair engine
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
+
           echo "Running SourceForageAI repair engine..."
-          python tools/repair/repair_engine.py || true
+
+          mkdir -p repaired_files
+
+          # Run modular engine
+          python -m tools.repair.repair_engine || true
+
+          if [ ! -f repair_report.txt ]; then
+            echo "Repair engine produced no report" > repair_report.txt
+          fi
+
+          if [ ! -f repair_report.json ]; then
+            echo "{}" > repair_report.json
+          fi
 
 
-      # ------------------------------
-      # Zip results
-      # ------------------------------
+      # ------------------------------------------------
+      # Zip repair results
+      # ------------------------------------------------
 
       - name: Zip repair results
         run: |
 
+          echo "Packaging repair results..."
+
           if [ -d repaired_files ]; then
-            zip -r sourceforage-repair-results.zip repair_report.txt repaired_files
+            zip -r sourceforage-repair-results.zip repair_report.txt repair_report.json repaired_files
           else
-            echo "No repaired files found"
-            zip sourceforage-repair-results.zip repair_report.txt || true
+            zip sourceforage-repair-results.zip repair_report.txt repair_report.json
           fi
 
 
-      # ------------------------------
+      # ------------------------------------------------
       # Generate release body
-      # ------------------------------
+      # ------------------------------------------------
 
       - name: Generate release body
         run: |
-          python tools/generate_release_body.py \
-            --workflow "Repair Engine" \
-            --report repair_report.txt
+
+          if [ -f tools/generate_release_body.py ]; then
+            python tools/generate_release_body.py \
+              --workflow "Repair Engine" \
+              --report repair_report.txt
+          else
+            echo "SourceForageAI automated repair run." > release_body.txt
+          fi
 
 
-      # ------------------------------
+      # ------------------------------------------------
       # Generate timestamp
-      # ------------------------------
+      # ------------------------------------------------
 
       - name: Generate timestamp
         run: |
@@ -103,9 +155,9 @@ jobs:
           echo "RELEASE_TAG=Repair-Engine-$TAG" >> $GITHUB_ENV
 
 
-      # ------------------------------
+      # ------------------------------------------------
       # Create GitHub release
-      # ------------------------------
+      # ------------------------------------------------
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -116,9 +168,9 @@ jobs:
           files: sourceforage-repair-results.zip
 
 
-      # ------------------------------
+      # ------------------------------------------------
       # Upload artifacts
-      # ------------------------------
+      # ------------------------------------------------
 
       - name: Upload repair artifacts
         uses: actions/upload-artifact@v4
@@ -126,4 +178,6 @@ jobs:
           name: sourceforage-repair-results
           path: |
             repair_report.txt
+            repair_report.json
             repaired_files/
+          if-no-files-found: ignore
