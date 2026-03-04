@@ -6,8 +6,10 @@ on:
   workflow_dispatch:
 
 jobs:
+
   build-and-fix:
 
+    # prevent infinite loops from bot commits
     if: github.actor != 'github-actions[bot]'
 
     runs-on: ubuntu-latest
@@ -18,21 +20,51 @@ jobs:
 
     steps:
 
+      # --------------------------------
+      # Checkout repo
+      # --------------------------------
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # --------------------------------
+      # Python setup
+      # --------------------------------
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Restore AI memory cache
+      # --------------------------------
+      # Ensure AI memory folder exists
+      # --------------------------------
+
+      - name: Prepare AI memory
+        run: |
+          mkdir -p tools/ai_memory
+          if [ ! -f tools/ai_memory/db.json ]; then
+            echo "{}" > tools/ai_memory/db.json
+          fi
+
+      # --------------------------------
+      # Restore AI memory cache
+      # --------------------------------
+
+      - name: Restore AI memory
         uses: actions/cache@v4
         with:
           path: tools/ai_memory/db.json
-          key: ai-memory-${{ github.repository }}
+          key: ai-memory-${{ github.repository }}-${{ github.ref }}
+          restore-keys: |
+            ai-memory-${{ github.repository }}
+            ai-memory-
+
+      # --------------------------------
+      # Install system dependencies
+      # --------------------------------
 
       - name: Install dependencies
         run: |
@@ -46,57 +78,48 @@ jobs:
             wget \
             unzip
 
-          pip install platformio requests || true
+          python -m pip install --upgrade pip
+          pip install requests || true
 
-      - name: Detect build command
-        id: detect
+      # --------------------------------
+      # Configure git
+      # --------------------------------
+
+      - name: Configure git
         run: |
-          if [ -f platformio.ini ]; then
-            CMD="pio run"
-          elif [ -f Makefile ] || [ -f makefile ]; then
-            CMD="make -j"
-          elif [ -f CMakeLists.txt ]; then
-            CMD="cmake -B build && cmake --build build"
-          else
-            CMD="make -j"
-          fi
+          git config --global user.name "ai-autobuilder[bot]"
+          git config --global user.email "ai-autobuilder@users.noreply.github.com"
 
-          echo "BUILD_CMD=$CMD" >> $GITHUB_OUTPUT
-
-      - name: First build
-        id: build
-        run: |
-          set -o pipefail
-          echo "Running build command: ${{ steps.detect.outputs.BUILD_CMD }}"
-          bash -lc "${{ steps.detect.outputs.BUILD_CMD }}" | tee build.log
-        continue-on-error: true
-
-      - name: Upload build log
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
-
-      - name: Ensure BusyBox config
-        if: steps.build.outcome != 'success'
-        run: |
-          if [ -f Makefile ] && grep -qi busybox Makefile 2>/dev/null; then
-            echo "BusyBox project detected"
-            if [ ! -f .config ]; then
-              make defconfig || true
-            fi
-          fi
+      # --------------------------------
+      # Run AI Autobuilder
+      # --------------------------------
 
       - name: Run AI Autobuilder
-        if: steps.build.outcome != 'success'
         env:
           PROVIDER: openai
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: gpt-4.1-mini
-          AI_BUILDER_ATTEMPTS: "2"
-          BUILD_CMD: ${{ steps.detect.outputs.BUILD_CMD }}
         run: |
+          echo "Starting AI Autobuilder..."
           python tools/ai_autobuilder.py || true
+
+      # --------------------------------
+      # Upload logs
+      # --------------------------------
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-build-logs
+          path: |
+            build.log
+            tools/ai_memory/db.json
+          if-no-files-found: ignore
+
+      # --------------------------------
+      # Detect repo changes
+      # --------------------------------
 
       - name: Check if files changed
         id: changes
@@ -107,6 +130,20 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
+      # --------------------------------
+      # Commit AI fixes
+      # --------------------------------
+
+      - name: Commit fixes
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git add .
+          git commit -m "AI autobuilder: automated fix"
+
+      # --------------------------------
+      # Create Pull Request
+      # --------------------------------
+
       - name: Create Pull Request
         if: steps.changes.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
@@ -115,9 +152,14 @@ jobs:
           base: main
           title: "AI Autobuilder Fix"
           body: |
-            Automated build fix generated by AI autobuilder.
+            Automated build repair generated by **AI Autobuilder**.
 
-            This patch was created automatically by the CI repair bot.
+            The system attempted to fix build failures automatically.
 
-            The AI system also stores learned fixes for future builds.
-          commit-message: "AI autobuilder: automated fix"
+            It may also generate build modules inside:
+
+            tools/build/
+
+            These modules allow the AI to learn how to build this repository automatically.
+
+            Please review the patch before merging.

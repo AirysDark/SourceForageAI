@@ -14,13 +14,24 @@ from build.detect import detect_build_type
 from build.knowledge import record
 from build.websearch import search_build_fix
 
+# universal build detection
+from build.universal_engine import detect_build_system
+
+# repository intelligence scanner
+from build.repo_intelligence import predict_build
+
 # self-training memory
 from ai_memory.memory import store_failure, store_fix, search_memory
+
+# successful build reference memory
+from ai_memory.success_memory import store_success, search_success
+
 
 PROJECT_ROOT = Path(".")
 
 
-PROMPT = """You are an automated build fixer working in a Git repository.
+PROMPT = """
+You are an automated build fixer working in a Git repository.
 
 Goal:
 Fix build failures by editing files.
@@ -54,43 +65,182 @@ Rules:
 """
 
 
+# ---------------------------------------------------
+# Extract useful error from build log
+# ---------------------------------------------------
+
 def extract_first_error(log):
 
-    """Try to extract the most useful error line"""
+    if not log:
+        return ""
 
     lines = log.split("\n")
 
-    for l in reversed(lines):
-        if "error" in l.lower():
-            return l
+    for line in reversed(lines):
 
-    return lines[-1] if lines else ""
+        l = line.lower()
 
+        if "error" in l or "failed" in l:
+            return line.strip()
+
+    return lines[-1].strip() if lines else ""
+
+
+# ---------------------------------------------------
+# Determine build system
+# ---------------------------------------------------
+
+def resolve_build_system():
+
+    try:
+
+        system = detect_build_system(PROJECT_ROOT)
+
+        if system:
+            return system
+
+    except Exception:
+        pass
+
+    try:
+        return detect_build_type(PROJECT_ROOT)
+    except Exception:
+        return "unknown"
+
+
+# ---------------------------------------------------
+# Determine build command
+# ---------------------------------------------------
+
+def resolve_build_command():
+
+    try:
+
+        predicted = predict_build()
+
+        if predicted:
+
+            print(f"Predicted build command: {predicted}")
+
+            return predicted
+
+    except Exception:
+        pass
+
+    return BUILD_CMD
+
+
+# ---------------------------------------------------
+# Attempt to reuse successful build references
+# ---------------------------------------------------
+
+def try_success_memory():
+
+    try:
+
+        repo_tree = get_repo_tree()
+
+        success = search_success(repo_tree)
+
+        if success:
+
+            print("Found successful build reference")
+
+            cmd = success.get("build_command")
+
+            if cmd:
+                print(f"Using stored command: {cmd}")
+                return cmd
+
+    except Exception:
+        pass
+
+    return None
+
+
+# ---------------------------------------------------
+# AI repair loop
+# ---------------------------------------------------
 
 def main():
 
     print("== AI Autobuilder ==")
 
-    # detect build system
-    build_type = detect_build_type(PROJECT_ROOT)
+    repo_tree = get_repo_tree()
+
+    # ------------------------------------------------
+    # Detect build system
+    # ------------------------------------------------
+
+    build_type = resolve_build_system()
 
     print(f"Detected build system: {build_type}")
 
-    code = run_build()
+    # ------------------------------------------------
+    # Try success memory
+    # ------------------------------------------------
+
+    build_cmd = try_success_memory()
+
+    # ------------------------------------------------
+    # Predict command if memory not found
+    # ------------------------------------------------
+
+    if not build_cmd:
+
+        build_cmd = resolve_build_command()
+
+    print(f"Using build command: {build_cmd}")
+
+    # ------------------------------------------------
+    # First build attempt
+    # ------------------------------------------------
+
+    code = run_build(build_cmd)
 
     log_tail = tail_build_log()
 
-    # record run
-    record(build_type, code == 0, log_tail)
+    try:
+        record(build_type, code == 0, log_tail)
+    except Exception:
+        pass
+
+    # ------------------------------------------------
+    # If build already works
+    # ------------------------------------------------
 
     if code == 0:
+
         print("Build already works.")
+
+        try:
+
+            store_success(
+                repo_tree,
+                build_cmd,
+                build_type,
+                log_tail
+            )
+
+        except Exception:
+            pass
+
         return 0
 
-    # store failure for training
-    store_failure(build_type, log_tail)
+    # ------------------------------------------------
+    # Store failure for training
+    # ------------------------------------------------
+
+    try:
+        store_failure(build_type, log_tail)
+    except Exception:
+        pass
 
     attempts = 0
+
+    # ------------------------------------------------
+    # AI Fix Attempts
+    # ------------------------------------------------
 
     while attempts < MAX_ATTEMPTS:
 
@@ -100,61 +250,153 @@ def main():
 
         log_tail = tail_build_log()
 
-        # check memory first
-        mem_patch = search_memory(log_tail)
+        diff = None
+
+        # ------------------------------------------------
+        # Try memory fixes first
+        # ------------------------------------------------
+
+        try:
+            mem_patch = search_memory(log_tail)
+        except Exception:
+            mem_patch = None
 
         if mem_patch:
+
             print("Found matching fix in local memory.")
+
             diff = mem_patch
+
         else:
 
             web_hint = ""
 
+            # --------------------------------------------
+            # Web hint search
+            # --------------------------------------------
+
             try:
+
                 err = extract_first_error(log_tail)
-                web_hint = search_build_fix(err)
+
+                if err:
+
+                    print("Searching web for hint...")
+
+                    web_hint = search_build_fix(err)
+
             except Exception:
                 pass
 
+            # --------------------------------------------
+            # Build AI prompt
+            # --------------------------------------------
+
             prompt = PROMPT.format(
                 build_type=build_type,
-                repo_tree=get_repo_tree(),
+                repo_tree=repo_tree,
                 recent_diff=get_recent_diff(),
-                build_cmd=BUILD_CMD,
+                build_cmd=build_cmd,
                 build_tail=log_tail,
                 project_hint=BUSYBOX_HINT if build_type == "busybox" else "",
                 web_hint=web_hint
             )
 
-            llm_out = call_llm(prompt)
+            # --------------------------------------------
+            # Call AI model
+            # --------------------------------------------
+
+            try:
+
+                llm_out = call_llm(prompt)
+
+            except Exception as e:
+
+                print("AI call failed:", e)
+
+                break
+
+            if not llm_out:
+
+                print("AI returned empty response")
+
+                break
 
             diff = extract_unified_diff(llm_out)
 
+        # ------------------------------------------------
+        # Validate patch
+        # ------------------------------------------------
+
         if not diff:
+
             print("No valid patch returned.")
+
             break
 
         print("\nPatch preview:\n")
+
         print(diff[:1500])
 
+        # ------------------------------------------------
+        # Apply patch
+        # ------------------------------------------------
+
         if not apply_patch(diff):
+
             print("Patch failed to apply.")
+
             break
 
-        # save successful fix
-        store_fix(diff)
+        # ------------------------------------------------
+        # Save patch
+        # ------------------------------------------------
 
-        code = run_build()
+        try:
+            store_fix(diff)
+        except Exception:
+            pass
 
-        record(build_type, code == 0, tail_build_log())
+        # ------------------------------------------------
+        # Rebuild
+        # ------------------------------------------------
+
+        code = run_build(build_cmd)
+
+        log_tail = tail_build_log()
+
+        try:
+            record(build_type, code == 0, log_tail)
+        except Exception:
+            pass
+
+        # ------------------------------------------------
+        # If build fixed
+        # ------------------------------------------------
 
         if code == 0:
+
             print("Build fixed!")
+
+            try:
+
+                store_success(
+                    repo_tree,
+                    build_cmd,
+                    build_type,
+                    log_tail
+                )
+
+            except Exception:
+                pass
+
             return 0
 
     print("Still failing.")
+
     return 1
 
 
 if __name__ == "__main__":
+
     sys.exit(main())

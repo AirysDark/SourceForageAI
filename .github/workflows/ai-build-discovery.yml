@@ -1,0 +1,94 @@
+name: AI Build Discovery
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+
+  discover-builds:
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+
+      # --------------------------------
+      # Checkout repository
+      # --------------------------------
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # --------------------------------
+      # Setup Python
+      # --------------------------------
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # --------------------------------
+      # Install dependencies
+      # --------------------------------
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      # --------------------------------
+      # Run build discovery
+      # --------------------------------
+
+      - name: Discover build systems
+        run: |
+          echo "Running build system discovery..."
+          python tools/build/generate_build_modules.py
+
+      # --------------------------------
+      # Configure git
+      # --------------------------------
+
+      - name: Configure git
+        run: |
+          git config user.name "ai-autobuilder[bot]"
+          git config user.email "ai-autobuilder@users.noreply.github.com"
+
+      # --------------------------------
+      # Detect changes
+      # --------------------------------
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      # --------------------------------
+      # Commit changes
+      # --------------------------------
+
+      - name: Commit build modules
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git add tools/build/
+          git commit -m "AI: update build system modules"
+
+      # --------------------------------
+      # Push updates
+      # --------------------------------
+
+      - name: Push updates
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git push

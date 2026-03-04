@@ -1,21 +1,36 @@
-import pathlib
+import importlib.util
+from pathlib import Path
+
+# directory containing build modules
+MODULE_DIR = Path(__file__).parent / "modules"
+
 
 def detect_build_type(repo):
 
-    repo = pathlib.Path(repo)
+    repo = Path(repo)
 
-    if (repo / "Makefile").exists():
-        if (repo / "applets").exists() or (repo / "busybox").exists():
-            return "busybox"
-        return "make"
+    if not MODULE_DIR.exists():
+        return "unknown"
 
-    if (repo / "platformio.ini").exists():
-        return "platformio"
+    for module_file in MODULE_DIR.glob("*.py"):
 
-    if (repo / "CMakeLists.txt").exists():
-        return "cmake"
+        name = module_file.stem
 
-    if (repo / "build.gradle").exists():
-        return "gradle"
+        try:
+
+            spec = importlib.util.spec_from_file_location(name, module_file)
+
+            module = importlib.util.module_from_spec(spec)
+
+            spec.loader.exec_module(module)
+
+            if hasattr(module, "detect"):
+
+                if module.detect(repo):
+
+                    return name
+
+        except Exception:
+            continue
 
     return "unknown"

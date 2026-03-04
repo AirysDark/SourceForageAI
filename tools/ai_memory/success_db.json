@@ -1,0 +1,61 @@
+import json
+from pathlib import Path
+import time
+
+DB_PATH = Path("tools/ai_memory/success_db.json")
+
+
+def _load():
+
+    if not DB_PATH.exists():
+        return {"builds": []}
+
+    with open(DB_PATH) as f:
+        return json.load(f)
+
+
+def _save(data):
+
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(DB_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+# -------------------------------------------------
+# Store successful build
+# -------------------------------------------------
+
+def store_success(repo_tree, build_cmd, build_type, log_tail):
+
+    data = _load()
+
+    entry = {
+        "timestamp": int(time.time()),
+        "build_type": build_type,
+        "build_command": build_cmd,
+        "repo_files": repo_tree[:5000],
+        "log_tail": log_tail[-2000:]
+    }
+
+    data["builds"].append(entry)
+
+    _save(data)
+
+
+# -------------------------------------------------
+# Search for similar successful builds
+# -------------------------------------------------
+
+def search_success(repo_tree):
+
+    data = _load()
+
+    files = repo_tree.lower()
+
+    for entry in reversed(data["builds"]):
+
+        if entry["build_type"] in files:
+            return entry
+
+    return None

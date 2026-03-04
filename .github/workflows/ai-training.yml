@@ -1,0 +1,94 @@
+name: AI Training
+
+on:
+  schedule:
+    - cron: "0 4 * * *"   # daily training
+  workflow_dispatch:
+
+jobs:
+
+  train-ai:
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+
+      # --------------------------------
+      # Checkout repository
+      # --------------------------------
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # --------------------------------
+      # Setup Python
+      # --------------------------------
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # --------------------------------
+      # Install dependencies
+      # --------------------------------
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests || true
+
+      # --------------------------------
+      # Configure git
+      # --------------------------------
+
+      - name: Configure git
+        run: |
+          git config user.name "ai-autobuilder[bot]"
+          git config user.email "ai-autobuilder@users.noreply.github.com"
+
+      # --------------------------------
+      # Run AI knowledge trainer
+      # --------------------------------
+
+      - name: Train build knowledge
+        run: |
+          echo "Running AI knowledge trainer..."
+          python tools/build/knowledge_trainer.py
+
+      # --------------------------------
+      # Detect changes
+      # --------------------------------
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      # --------------------------------
+      # Commit training updates
+      # --------------------------------
+
+      - name: Commit updates
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git add .
+          git commit -m "AI training: updated build knowledge"
+
+      # --------------------------------
+      # Push updates
+      # --------------------------------
+
+      - name: Push updates
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git push

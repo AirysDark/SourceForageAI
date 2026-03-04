@@ -1,0 +1,45 @@
+"""
+Build System Module
+
+Name: kbuild
+
+Description:
+A template with Linux kernel like build system.
+
+Homepage:
+https://github.com/masahir0y/kbuild_skeleton
+"""
+
+import os
+import subprocess
+
+NAME = "kbuild"
+
+INDICATORS = ['Kbuild']
+
+DEFAULT_COMMAND = "make"
+
+
+def detect(repo_root="."):
+
+    for root, dirs, files in os.walk(repo_root):
+
+        for f in files:
+
+            if f in INDICATORS:
+                return True
+
+    return False
+
+
+def build():
+
+    print("Running build system:", NAME)
+
+    if DEFAULT_COMMAND:
+
+        subprocess.run(DEFAULT_COMMAND, shell=True)
+
+    else:
+
+        print("No default build command known")

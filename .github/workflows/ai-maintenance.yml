@@ -1,0 +1,86 @@
+name: AI Maintenance
+
+on:
+  schedule:
+    - cron: "0 5 * * 0"   # every Sunday
+  workflow_dispatch:
+
+jobs:
+
+  cleanup:
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+
+      # --------------------------------
+      # Checkout repository
+      # --------------------------------
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # --------------------------------
+      # Configure git
+      # --------------------------------
+
+      - name: Configure git
+        run: |
+          git config user.name "ai-autobuilder[bot]"
+          git config user.email "ai-autobuilder@users.noreply.github.com"
+
+      # --------------------------------
+      # Clean temporary files
+      # --------------------------------
+
+      - name: Clean logs and temp files
+        run: |
+          echo "Cleaning maintenance files..."
+
+          mkdir -p logs tmp
+
+          rm -rf logs/*
+          rm -rf tmp/*
+
+          # optional cleanup targets
+          rm -rf build/*
+          rm -rf dist/*
+          rm -rf .pytest_cache
+          rm -rf __pycache__
+
+      # --------------------------------
+      # Detect changes
+      # --------------------------------
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      # --------------------------------
+      # Commit cleanup
+      # --------------------------------
+
+      - name: Commit cleanup
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git add -A
+          git commit -m "AI maintenance: repository cleanup"
+
+      # --------------------------------
+      # Push cleanup
+      # --------------------------------
+
+      - name: Push cleanup
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git push
