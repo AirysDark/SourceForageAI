@@ -53,43 +53,52 @@ jobs:
           zip sourceforage-test-report.zip system_test_report.json
 
 
-      - name: Generate release metadata
+      - name: Generate release info
         run: |
           DATE=$(date "+%Y-%m-%d %H:%M:%S")
-          echo "$DATE" > release_title.txt
 
-          python << 'PY'
+          echo "RELEASE_TITLE=$DATE" >> $GITHUB_ENV
+          echo "RELEASE_TAG=SourceForageAI-System-Test" >> $GITHUB_ENV
+
+          echo "Parsing errors..."
+
+          ERRORS=$(python - <<EOF
+
+          
 import json
-
-body = ["SourceForageAI System Test Report", ""]
 
 try:
     r=json.load(open("system_test_report.json"))
-
     errors=[]
     errors+=r.get("module_failures",[])
     errors+=r.get("build_module_failures",[])
     errors+=r.get("yaml_failures",[])
 
-    body.append("Key Errors:\n")
-
-    if errors:
-        for e in errors[:20]:
-            body.append(str(e))
+    if not errors:
+        print("No errors detected")
     else:
-        body.append("No errors detected")
+        for e in errors[:20]:
+            print(e)
 
 except:
-    body.append("Report parsing failed")
+    print("Report parsing failed")
+EOF
+)
 
-open("release_body.txt","w").write("\n".join(body))
-PY
+          echo "RELEASE_BODY<<EOF" >> $GITHUB_ENV
+          echo "SourceForageAI System Test Report" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "Run Time: $DATE" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "Key Errors:" >> $GITHUB_ENV
+          echo "$ERRORS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: SourceForageAI-System-Test
-          name: ${{ github.run_id }}
-          body_path: release_body.txt
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TITLE }}
+          body: ${{ env.RELEASE_BODY }}
           files: sourceforage-test-report.zip
