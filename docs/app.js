@@ -20,8 +20,25 @@ if(!token){
 function resetToken(){
 
     localStorage.removeItem("sf_token")
-
     location.reload()
+
+}
+
+
+/* -------------------------
+   Log helper
+------------------------- */
+
+function log(msg){
+
+    const logs = document.getElementById("logs")
+
+    if(!logs) return
+
+    const time = new Date().toLocaleTimeString()
+
+    logs.textContent =
+        `[${time}] ${msg}\n` + logs.textContent
 
 }
 
@@ -34,6 +51,16 @@ async function runWorkflow(workflow){
 
     const targetRepo =
         document.getElementById("repo")?.value || ""
+
+    if(!targetRepo){
+
+        alert("Enter repository: owner/repo")
+
+        return
+
+    }
+
+    log(`Starting workflow: ${workflow}`)
 
     const url =
     `https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/${workflow}/dispatches`
@@ -65,7 +92,7 @@ async function runWorkflow(workflow){
 
         if(res.status === 204){
 
-            alert("Workflow started")
+            log(`Workflow started: ${workflow}`)
 
             loadRuns()
             loadStats()
@@ -77,6 +104,8 @@ async function runWorkflow(workflow){
 
             console.error(text)
 
+            log("Workflow start failed")
+
             alert("Failed to start workflow")
 
         }
@@ -86,6 +115,8 @@ async function runWorkflow(workflow){
     catch(err){
 
         console.error(err)
+
+        log("Network error")
 
         alert("Network error")
 
@@ -101,16 +132,14 @@ async function runWorkflow(workflow){
 async function loadRuns(){
 
     const url =
-    `https://api.github.com/repos/${OWNER}/${REPO}/actions/runs`
+    `https://api.github.com/repos/${OWNER}/${REPO}/actions/runs?per_page=10`
 
     try{
 
         const res = await fetch(url,{
-
             headers:{
                 "Authorization":"token "+token
             }
-
         })
 
         const data = await res.json()
@@ -122,41 +151,44 @@ async function loadRuns(){
 
         container.innerHTML = ""
 
-        data.workflow_runs
-            .slice(0,10)
-            .forEach(run=>{
+        data.workflow_runs.forEach(run=>{
 
-                const div =
-                    document.createElement("div")
+            const div =
+                document.createElement("div")
 
-                div.className = "queue-item"
+            div.className = "queue-item"
 
-                let statusClass = ""
+            let statusClass = ""
 
-                if(run.conclusion === "success")
-                    statusClass = "success"
+            if(run.conclusion === "success")
+                statusClass = "success"
 
-                if(run.conclusion === "failure")
-                    statusClass = "error"
+            else if(run.conclusion === "failure")
+                statusClass = "error"
 
-                if(run.status === "in_progress")
-                    statusClass = "warning"
+            else if(run.status === "in_progress")
+                statusClass = "warning"
 
-                div.innerHTML =
-                `${run.name}
-                 <span class="badge ${statusClass}">
-                 ${run.status}
-                 </span>`
+            const link =
+                `<a href="${run.html_url}" target="_blank">${run.name}</a>`
 
-                container.appendChild(div)
+            div.innerHTML =
+            `${link}
+             <span class="badge ${statusClass}">
+             ${run.status}
+             </span>`
 
-            })
+            container.appendChild(div)
+
+        })
 
     }
 
     catch(err){
 
         console.error("Run fetch error",err)
+
+        log("Failed loading runs")
 
     }
 
@@ -175,12 +207,9 @@ async function loadStats(){
     try{
 
         const res = await fetch(url,{
-
             headers:{
                 "Authorization":"token "+token
-
             }
-
         })
 
         const data = await res.json()
@@ -224,6 +253,8 @@ async function loadStats(){
 
         console.error("Stats fetch error",err)
 
+        log("Stats loading error")
+
     }
 
 }
@@ -234,6 +265,8 @@ async function loadStats(){
 ------------------------- */
 
 function startRefresh(){
+
+    log("Dashboard started")
 
     loadRuns()
     loadStats()

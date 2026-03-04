@@ -19,7 +19,13 @@ SourceForageAI Control Panel
 </div>
 
 <div>
+
 <span class="badge success">ONLINE</span>
+
+<button onclick="resetToken()" class="small">
+Reset Token
+</button>
+
 </div>
 
 </div>
@@ -40,6 +46,10 @@ SourceForageAI Control Panel
 
 <div class="workflow-buttons">
 
+<button onclick="runWorkflow('ai-remote-build.yml')">
+Build Repository
+</button>
+
 <button onclick="runWorkflow('ai-autobuilder.yml')">
 Run Autobuilder
 </button>
@@ -48,7 +58,7 @@ Run Autobuilder
 Run Repo Crawler
 </button>
 
-<button onclick="runWorkflow('ai-module-expansion.yml')">
+<button onclick="runWorkflow('ai-module-generator.yml')">
 Expand Modules
 </button>
 
@@ -58,6 +68,18 @@ Repair Build
 
 <button onclick="runWorkflow('recon.yml')">
 Ultra Deep Recon
+</button>
+
+<button onclick="runWorkflow('ai-brain-trainer.yml')">
+Train Knowledge Brain
+</button>
+
+<button onclick="runWorkflow('ai-build-stats.yml')">
+Build Statistics
+</button>
+
+<button onclick="runWorkflow('ai-knowledge-export.yml')">
+Export Knowledge
 </button>
 
 <button onclick="runWorkflow('test.yml')">
@@ -75,7 +97,11 @@ System Test
 
 <h3>Workflow Activity</h3>
 
-<pre id="logs">Loading workflow data...</pre>
+<pre id="logs">
+
+Waiting for workflow activity...
+
+</pre>
 
 </div>
 
@@ -105,7 +131,7 @@ Failed Builds:
 
 <div>
 Success Rate:
-<span id="successRate" class="badge success">0%</span>
+<span id="success" class="badge success">0%</span>
 </div>
 
 </div>
@@ -131,7 +157,7 @@ Loading...
 
 <div class="footer">
 
-SourceForageAI Build Intelligence System
+SourceForageAI Autonomous Build Intelligence System
 
 </div>
 
