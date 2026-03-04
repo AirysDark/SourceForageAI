@@ -1,282 +1,223 @@
 name: AI Remote Build Lab
 
 on:
-workflow_dispatch:
-inputs:
+  workflow_dispatch:
+    inputs:
 
-  repository:
-    description: "GitHub repository (owner/repo or URL)"
-    required: false
-    type: string
+      repository:
+        description: "GitHub repository (owner/repo or URL)"
+        required: false
+        type: string
 
-  branch:
-    description: "Branch to checkout"
-    default: "main"
-    required: false
-    type: string
+      branch:
+        description: "Branch to checkout"
+        default: "main"
+        required: false
+        type: string
 
-  build_hint:
-    description: "Optional build system hint (cmake, make, python, cargo, etc)"
-    required: false
-    type: string
+      build_hint:
+        description: "Optional build system hint (cmake, make, python, cargo, etc)"
+        required: false
+        type: string
 
-  custom_command:
-    description: "Custom build command to run before AI autobuilder"
-    required: false
-    type: string
+      custom_command:
+        description: "Custom build command to run before AI autobuilder"
+        required: false
+        type: string
 
-  run_discovery:
-    description: "Run Build Discovery"
-    required: true
-    default: true
-    type: boolean
+      run_discovery:
+        description: "Run Build Discovery"
+        required: true
+        default: true
+        type: boolean
 
-  run_module_generator:
-    description: "Run Module Generator"
-    required: true
-    default: true
-    type: boolean
+      run_module_generator:
+        description: "Run Module Generator"
+        required: true
+        default: true
+        type: boolean
 
-  run_training:
-    description: "Run AI Training"
-    required: true
-    default: true
-    type: boolean
+      run_training:
+        description: "Run AI Training"
+        required: true
+        default: true
+        type: boolean
 
-  run_autobuilder:
-    description: "Run AI Autobuilder"
-    required: true
-    default: true
-    type: boolean
+      run_autobuilder:
+        description: "Run AI Autobuilder"
+        required: true
+        default: true
+        type: boolean
 
-  run_brain_training:
-    description: "Run Knowledge Brain Training"
-    required: false
-    default: false
-    type: boolean
+      run_brain_training:
+        description: "Run Knowledge Brain Training"
+        required: false
+        default: false
+        type: boolean
 
-  run_stats:
-    description: "Generate Build Statistics"
-    required: false
-    default: false
-    type: boolean
+      run_stats:
+        description: "Generate Build Statistics"
+        required: false
+        default: false
+        type: boolean
 
-  run_export:
-    description: "Export Knowledge Database"
-    required: false
-    default: false
-    type: boolean
+      run_export:
+        description: "Export Knowledge Database"
+        required: false
+        default: false
+        type: boolean
 
-  crawler_mode:
-    description: "Run Repository Crawler Instead of Single Repo Build"
-    required: false
-    default: false
-    type: boolean
+      crawler_mode:
+        description: "Run Repository Crawler Instead of Single Repo Build"
+        required: false
+        default: false
+        type: boolean
+
 
 jobs:
 
-build-remote:
+  build-remote:
 
-runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
 
-permissions:
-  contents: write
-  pull-requests: write
+    permissions:
+      contents: write
+      pull-requests: write
 
-steps:
+    steps:
 
-# --------------------------------
-# Checkout AI system
-# --------------------------------
-
-- name: Checkout SourceForageAI
-  uses: actions/checkout@v4
-  with:
-    fetch-depth: 0
+      - name: Checkout SourceForageAI
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
 
-# --------------------------------
-# Setup Python
-# --------------------------------
-
-- name: Setup Python
-  uses: actions/setup-python@v5
-  with:
-    python-version: "3.11"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
 
-# --------------------------------
-# Install dependencies
-# --------------------------------
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
 
-- name: Install dependencies
-  run: |
-    sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            git \
+            ninja-build \
+            meson \
+            bison \
+            flex \
+            wget \
+            unzip
 
-    sudo apt-get install -y \
-      build-essential \
-      cmake \
-      git \
-      ninja-build \
-      meson \
-      bison \
-      flex \
-      wget \
-      unzip
-
-    python -m pip install --upgrade pip
-    pip install requests || true
+          python -m pip install --upgrade pip
+          pip install requests || true
 
 
-# --------------------------------
-# Optional crawler mode
-# --------------------------------
-
-- name: Run repository crawler
-  if: ${{ github.event.inputs.crawler_mode == 'true' }}
-  run: |
-    echo "Running repository crawler..."
-    python tools/build/repo_crawler.py || true
+      - name: Run repository crawler
+        if: ${{ github.event.inputs.crawler_mode == 'true' }}
+        run: |
+          echo "Running repository crawler..."
+          python tools/build/repo_crawler.py || true
 
 
-# --------------------------------
-# Clone target repository
-# --------------------------------
+      - name: Clone target repository
+        if: ${{ github.event.inputs.crawler_mode != 'true' && github.event.inputs.repository != '' }}
+        run: |
 
-- name: Clone target repository
-  if: ${{ github.event.inputs.crawler_mode != 'true' && github.event.inputs.repository != '' }}
-  run: |
+          echo "Target repo: ${{ github.event.inputs.repository }}"
 
-    echo "Target repo: ${{ github.event.inputs.repository }}"
+          REPO="${{ github.event.inputs.repository }}"
 
-    REPO="${{ github.event.inputs.repository }}"
+          if [[ "$REPO" == https://* ]]; then
+            git clone "$REPO" target_repo
+          else
+            git clone "https://github.com/$REPO.git" target_repo
+          fi
 
-    if [[ "$REPO" == https://* ]]; then
-      git clone "$REPO" target_repo
-    else
-      git clone "https://github.com/$REPO.git" target_repo
-    fi
-
-    cd target_repo
-    git checkout "${{ github.event.inputs.branch }}" || true
+          cd target_repo
+          git checkout "${{ github.event.inputs.branch }}" || true
 
 
-# --------------------------------
-# Apply build hint
-# --------------------------------
-
-- name: Apply build hint
-  if: ${{ github.event.inputs.build_hint != '' }}
-  run: |
-    echo "Build hint: ${{ github.event.inputs.build_hint }}"
-    echo "${{ github.event.inputs.build_hint }}" > target_repo/build_hint.txt
+      - name: Apply build hint
+        if: ${{ github.event.inputs.build_hint != '' }}
+        run: |
+          echo "Build hint: ${{ github.event.inputs.build_hint }}"
+          echo "${{ github.event.inputs.build_hint }}" > target_repo/build_hint.txt
 
 
-# --------------------------------
-# Run build discovery
-# --------------------------------
-
-- name: Run build discovery
-  if: ${{ github.event.inputs.run_discovery == 'true' }}
-  run: |
-    echo "Running build discovery..."
-    python tools/build/generate_build_modules.py || true
+      - name: Run build discovery
+        if: ${{ github.event.inputs.run_discovery == 'true' }}
+        run: |
+          echo "Running build discovery..."
+          python tools/build/generate_build_modules.py || true
 
 
-# --------------------------------
-# Generate modules
-# --------------------------------
-
-- name: Run module generator
-  if: ${{ github.event.inputs.run_module_generator == 'true' }}
-  run: |
-    echo "Running module generator..."
-    python tools/build/module_generator.py || true
+      - name: Run module generator
+        if: ${{ github.event.inputs.run_module_generator == 'true' }}
+        run: |
+          echo "Running module generator..."
+          python tools/build/module_generator.py || true
 
 
-# --------------------------------
-# Train knowledge
-# --------------------------------
-
-- name: Run AI training
-  if: ${{ github.event.inputs.run_training == 'true' }}
-  run: |
-    echo "Running AI training..."
-    python tools/build/knowledge_trainer.py || true
+      - name: Run AI training
+        if: ${{ github.event.inputs.run_training == 'true' }}
+        run: |
+          echo "Running AI training..."
+          python tools/build/knowledge_trainer.py || true
 
 
-# --------------------------------
-# Knowledge brain training
-# --------------------------------
-
-- name: Train Knowledge Brain
-  if: ${{ github.event.inputs.run_brain_training == 'true' }}
-  run: |
-    echo "Training Knowledge Brain..."
-    python tools/build/knowledge_brain/train_brain.py || true
+      - name: Train Knowledge Brain
+        if: ${{ github.event.inputs.run_brain_training == 'true' }}
+        run: |
+          echo "Training Knowledge Brain..."
+          python tools/build/knowledge_brain/train_brain.py || true
 
 
-# --------------------------------
-# Custom command
-# --------------------------------
+      - name: Run custom command
+        if: ${{ github.event.inputs.custom_command != '' }}
+        run: |
+          echo "Running custom command:"
+          echo "${{ github.event.inputs.custom_command }}"
 
-- name: Run custom command
-  if: ${{ github.event.inputs.custom_command != '' }}
-  run: |
-    echo "Running custom command:"
-    echo "${{ github.event.inputs.custom_command }}"
-
-    cd target_repo
-    bash -c "${{ github.event.inputs.custom_command }}" || true
+          cd target_repo
+          bash -c "${{ github.event.inputs.custom_command }}" || true
 
 
-# --------------------------------
-# Run AI Autobuilder
-# --------------------------------
+      - name: Run AI Autobuilder
+        if: ${{ github.event.inputs.run_autobuilder == 'true' }}
+        env:
+          PROVIDER: openai
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: gpt-4.1-mini
+        run: |
+          echo "Running AI Autobuilder..."
 
-- name: Run AI Autobuilder
-  if: ${{ github.event.inputs.run_autobuilder == 'true' }}
-  env:
-    PROVIDER: openai
-    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-    OPENAI_MODEL: gpt-4.1-mini
-  run: |
-    echo "Running AI Autobuilder..."
-
-    cd target_repo
-    python ../tools/ai_autobuilder.py || true
+          cd target_repo
+          python ../tools/ai_autobuilder.py || true
 
 
-# --------------------------------
-# Build statistics
-# --------------------------------
-
-- name: Generate build statistics
-  if: ${{ github.event.inputs.run_stats == 'true' }}
-  run: |
-    python tools/build/build_stats.py || true
+      - name: Generate build statistics
+        if: ${{ github.event.inputs.run_stats == 'true' }}
+        run: |
+          python tools/build/build_stats.py || true
 
 
-# --------------------------------
-# Export knowledge
-# --------------------------------
-
-- name: Export knowledge database
-  if: ${{ github.event.inputs.run_export == 'true' }}
-  run: |
-    python tools/build/export_knowledge.py || true
+      - name: Export knowledge database
+        if: ${{ github.event.inputs.run_export == 'true' }}
+        run: |
+          python tools/build/export_knowledge.py || true
 
 
-# --------------------------------
-# Upload logs
-# --------------------------------
-
-- name: Upload logs
-  if: always()
-  uses: actions/upload-artifact@v4
-  with:
-    name: sourceforage-build-logs
-    path: |
-      target_repo/build.log
-      tools/ai_memory/success_db.json
-      tools/build/knowledge_brain/brain.db
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sourceforage-build-logs
+          path: |
+            target_repo/build.log
+            tools/ai_memory/success_db.json
+            tools/build/knowledge_brain/brain.db
