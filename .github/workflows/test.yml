@@ -58,10 +58,16 @@ jobs:
           python tools/generate_release_body.py
 
 
+      - name: Generate timestamp
+        run: |
+          echo "RELEASE_TITLE=SourceForageAI System Test - $(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
+          echo "RELEASE_TAG=sourceforage-test-$(date '+%Y%m%d-%H%M%S')" >> $GITHUB_ENV
+
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: SourceForageAI-System-Test
-          name: ${{ github.run_id }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TITLE }}
           body_path: release_body.txt
           files: sourceforage-test-report.zip
