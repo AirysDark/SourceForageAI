@@ -1,0 +1,46 @@
+name: AI YAML Fixer
+
+on:
+push:
+paths:
+- ".github/workflows/*.yml"
+
+workflow_dispatch:
+
+jobs:
+
+fix-yaml:
+
+runs-on: ubuntu-latest
+
+permissions:
+  contents: write
+
+steps:
+
+  - name: Checkout SourceForageAI
+    uses: actions/checkout@v4
+
+  - name: Setup Python
+    uses: actions/setup-python@v5
+    with:
+      python-version: "3.11"
+
+  - name: Install dependencies
+    run: |
+      pip install pyyaml
+
+  - name: Run YAML fixer
+    run: |
+      python tools/build/yml_fixer.py
+
+  - name: Commit fixes
+    run: |
+      git config user.name "sourceforage-ai"
+      git config user.email "ai@sourceforage"
+
+      git add .github/workflows/*.yml
+
+      git commit -m "AI fixed workflow YAML" || true
+
+      git push
