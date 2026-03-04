@@ -1,27 +1,40 @@
 import json
 from pathlib import Path
 
-report = json.loads(Path("system_test_report.json").read_text())
 
-print("\n===== SourceForageAI TEST REPORT =====\n")
+REPORT_FILE = Path("system_test_report.json")
 
-print("Python modules loaded:", len(report["python_modules"]))
-print("Build modules detected:", len(report["build_modules"]))
-print("Workflow files valid:", len(report["yaml_files"]))
+if not REPORT_FILE.exists():
 
-if report["module_failures"]:
-    print("\nPython module failures:")
-    for f in report["module_failures"]:
-        print(f)
+    print("Report file not found")
+    exit(1)
 
-if report["build_module_failures"]:
-    print("\nBuild module failures:")
-    for f in report["build_module_failures"]:
-        print(f)
 
-if report["yaml_failures"]:
-    print("\nYAML failures:")
-    for f in report["yaml_failures"]:
-        print(f)
+report = json.loads(REPORT_FILE.read_text())
 
-print("\n======================================")
+
+print("\n===== SourceForageAI SYSTEM TEST REPORT =====\n")
+
+summary = report["summary"]
+
+for k, v in summary.items():
+    print(f"{k}: {v}")
+
+
+def print_section(title, items):
+
+    if not items:
+        return
+
+    print(f"\n{title}\n")
+
+    for item in items:
+        print(item)
+
+
+print_section("Python module failures", report["module_failures"])
+print_section("Build module failures", report["build_module_failures"])
+print_section("Workflow YAML failures", report["yaml_failures"])
+
+
+print("\n=============================================\n")

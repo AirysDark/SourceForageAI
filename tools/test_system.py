@@ -1,7 +1,6 @@
 import sys
 import json
 import yaml
-import importlib
 import importlib.util
 from pathlib import Path
 from time import time
@@ -9,7 +8,6 @@ from time import time
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# ensure project root is importable
 sys.path.insert(0, str(ROOT))
 
 
@@ -24,14 +22,25 @@ REPORT = {
 }
 
 
+SKIP_DIRS = {
+    "__pycache__",
+    ".git",
+    "venv",
+    ".venv",
+    "node_modules",
+    "dist",
+    "build"
+}
+
+
 # --------------------------------
-# Utility: safe module loader
+# Safe module loader
 # --------------------------------
 
-def load_module_from_path(path: Path):
-    """Safely load module regardless of filename"""
+def load_module(path: Path):
 
     try:
+
         spec = importlib.util.spec_from_file_location(path.stem, path)
 
         module = importlib.util.module_from_spec(spec)
@@ -41,24 +50,22 @@ def load_module_from_path(path: Path):
         return module, None
 
     except Exception as e:
+
         return None, str(e)
 
 
 # --------------------------------
-# Test Python modules
+# Python module tests
 # --------------------------------
 
 def test_python_modules():
 
     for file in ROOT.rglob("*.py"):
 
-        if "__pycache__" in str(file):
+        if any(x in file.parts for x in SKIP_DIRS):
             continue
 
-        if ".github" in str(file):
-            continue
-
-        module, error = load_module_from_path(file)
+        module, error = load_module(file)
 
         if error:
 
@@ -73,7 +80,7 @@ def test_python_modules():
 
 
 # --------------------------------
-# Test build modules
+# Build module validation
 # --------------------------------
 
 def test_build_modules():
@@ -85,7 +92,7 @@ def test_build_modules():
 
     for file in module_dir.glob("*.py"):
 
-        module, error = load_module_from_path(file)
+        module, error = load_module(file)
 
         if error:
 
@@ -96,12 +103,29 @@ def test_build_modules():
 
             continue
 
-        if hasattr(module, "detect"):
-            REPORT["build_modules"].append(file.stem)
+        required = [
+            "NAME",
+            "INDICATORS",
+            "DEFAULT_COMMAND",
+            "detect"
+        ]
+
+        missing = [x for x in required if not hasattr(module, x)]
+
+        if missing:
+
+            REPORT["build_module_failures"].append({
+                "file": str(file),
+                "error": f"missing attributes {missing}"
+            })
+
+        else:
+
+            REPORT["build_modules"].append(module.NAME)
 
 
 # --------------------------------
-# Validate YAML workflows
+# YAML workflow validation
 # --------------------------------
 
 def test_yaml():
@@ -115,7 +139,16 @@ def test_yaml():
 
         try:
 
-            yaml.safe_load(file.read_text())
+            data = yaml.safe_load(file.read_text())
+
+            if not isinstance(data, dict):
+                raise Exception("invalid root structure")
+
+            required = ["name", "on", "jobs"]
+
+            for r in required:
+                if r not in data:
+                    raise Exception(f"missing key: {r}")
 
             REPORT["yaml_files"].append(str(file))
 
@@ -128,10 +161,10 @@ def test_yaml():
 
 
 # --------------------------------
-# Summary
+# Build summary
 # --------------------------------
 
-def build_summary(start_time):
+def build_summary(start):
 
     REPORT["summary"] = {
 
@@ -154,35 +187,33 @@ def build_summary(start_time):
             len(REPORT["yaml_failures"]),
 
         "runtime_seconds":
-            round(time() - start_time, 2)
+            round(time() - start, 2)
     }
 
 
 # --------------------------------
-# Run all tests
+# Run tests
 # --------------------------------
 
 def run():
 
-    print("Running SourceForageAI system tests")
+    print("\nRunning SourceForageAI system tests\n")
 
     start = time()
 
     test_python_modules()
-
     test_build_modules()
-
     test_yaml()
 
     build_summary(start)
 
-    out = ROOT / "system_test_report.json"
+    report_file = ROOT / "system_test_report.json"
 
-    out.write_text(json.dumps(REPORT, indent=2))
+    report_file.write_text(json.dumps(REPORT, indent=2))
 
-    print("Report saved:", out)
+    print("Report saved:", report_file)
 
-    print("\nSummary:")
+    print("\nSummary\n")
 
     for k, v in REPORT["summary"].items():
         print(f"{k}: {v}")
